@@ -20,7 +20,7 @@ if __name__ == "__main__":
     parser.add_argument('--mc_step', type=int, default=2)
     parser.add_argument('--saving_steps', type=int, default=1000)
     parser.add_argument('--learning_rate', default=0.001, type=float)
-    parser.add_argument('--portion', default=0.1, type=float)
+    parser.add_argument('--label_num', default=0, type=int)
     parser.add_argument('--delta', default=0.00001, type=float)
     parser.add_argument('--data_path', default='./data', type=str, help='The path of the data directory')
     parser.add_argument('--ckpt_dir', default='./ckpt', type=str, help='The path of the checkpoint directory')

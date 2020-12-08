@@ -26,10 +26,17 @@ def load_cifar_dataset(args):
     test_data = dataset(args.data_path, train=False, transform=test_transform, download=True)
 
     train_data, valid_data = torch.utils.data.random_split(train_data, lengths=[len(train_data) - round(0.1 * len(train_data)), round(0.1 * len(train_data))])
-
+    print("Dataset: CIFAR10")
+    print(f"Training set length: {len(train_data)}")
+    print(f"Validation set length: {len(valid_data)}")
+    print(f"Testing set length: {len(test_data)}")
     total_len = len(train_data)
-    unlabeled_len = round(total_len * args.portion)
-    labeled_len = total_len - unlabeled_len
+    if args.label_num == 0:
+        unlabeled_len = 0
+        labeled_len = total_len
+    else:
+        unlabeled_len = total_len - args.label_num
+        labeled_len = args.label_num
     unlabeled_indice = []
     labeled_indice = []
     targets = np.array(train_data.targets)
