@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from torch.utils.data.distributed import DistributedSampler
 
 
-def load_minist_dataset(args):
+def load_mnist_dataset(args):
 
     dataset = dset.MNIST
     train_transform = transforms.Compose([
@@ -20,8 +20,12 @@ def load_minist_dataset(args):
 
     train_data = dataset(args.data_path, train=True, transform=train_transform, download=True)
     test_data = dataset(args.data_path, train=False, transform=test_transform, download=True)
+    train_data, valid_data = torch.utils.data.random_split(train_data, lengths=[len(train_data) - round(0.1 * len(train_data)), round(0.1 * len(train_data))])
 
-
+    print("Dataset: MNIST")
+    print(f"Training set length: {len(train_data)}")
+    print(f"Validation set length: {len(valid_data)}")
+    print(f"Testing set length: {len(test_data)}")
     total_len = len(train_data)
     if args.label_num == 0:
         unlabeled_len = 0
@@ -39,9 +43,6 @@ def load_minist_dataset(args):
         labeled_indice = labeled_indice + indices[unlabeled_len_per_class:].tolist()
     unlabeled_train_data = torch.utils.data.Subset(train_data, unlabeled_indice)
     labeled_train_data = torch.utils.data.Subset(train_data, labeled_indice)
-
-    labeled_train_data, valid_data = torch.utils.data.random_split(labeled_train_data, lengths=[len(labeled_train_data) - round(0.1 * len(labeled_train_data)), round(0.1 * len(labeled_train_data))])
-    labeled_len = len(labeled_train_data)
 
     labeled_train_sampler = DistributedSampler(labeled_train_data) if args.distributed else None
     unlabeled_train_sampler = DistributedSampler(unlabeled_train_data) if args.distributed else None
