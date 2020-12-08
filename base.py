@@ -75,8 +75,6 @@ if __name__ == "__main__":
     parser.add_argument('--workers', default=0, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--epochs', default=100, type=int)
-    parser.add_argument('--logging_steps', type=int, default=100)
-    parser.add_argument('--saving_steps', type=int, default=1000)
     parser.add_argument('--learning_rate', default=0.001, type=float)
     parser.add_argument('--label_num', default=0, type=int)
     parser.add_argument('--data_path', default='./data', type=str, help='The path of the data directory')
@@ -98,7 +96,7 @@ if __name__ == "__main__":
     else:
         print("Unsupported dataset.")
         exit(0)
-    model.to(device)
+    model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
     if args.do_train:

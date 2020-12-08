@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import os
 import numpy as np
-from scalablebdl.mean_field import PsiSGD, to_bayesian, to_deterministic
+from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
 
 

@@ -1,13 +1,11 @@
 from trainer import Trainer
 from tensorboardX import SummaryWriter
 import torch
-import torch.optim as optim
 import os
 import argparse
-from scalablebdl.bnn_utils import freeze, unfreeze, disable_dropout, Bayes_ensemble
-from scalablebdl.mean_field import PsiSGD, to_bayesian, to_deterministic
 from datasets.cifar10 import load_cifar_dataset
 from datasets.mnist import load_mnist_dataset
+from models import SmallNet, LargeNet
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -38,8 +36,16 @@ if __name__ == "__main__":
 
     device = torch.device('cuda')
     tb_writer = SummaryWriter(args.log_dir)
-    labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_mnist_dataset(args)
-    net = wrn(pretrained=True, depth=28, width=10).to(device)
+    if args.dataset == 'mnist':
+        labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_mnist_dataset(args)
+        net = SmallNet()
+    elif args.dataset == 'cifar10':
+        labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_cifar_dataset(args)
+        net = LargeNet()
+    else:
+        print("Unsupported dataset.")
+        exit(0)
+    net = net.to(device)
     print("load model successfully")
     # eval_loss, eval_acc = Bayes_ensemble(test_loader, net, num_mc_samples=1)
     # print('Results of deterministic pre-training, eval loss {}, eval acc {}'.format(eval_loss, eval_acc))
