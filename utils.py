@@ -1,57 +1,54 @@
-import numpy as np
-from random import random, choice
-from scipy.ndimage.filters import gaussian_filter
-from io import BytesIO
-from PIL import Image
-from PIL import ImageFile
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-
-class GeneratedDataAugment(object):
-    def __init__(self, args):
-        self.args = args
-
-    def __call__(self, img):
-        img = np.array(img)
-
-        if random() < self.args.blur_prob:
-            sig = sample_continuous(self.args.blur_sig)
-            gaussian_blur(img, sig)
-
-        if random() < self.args.jpg_prob:
-            method = sample_discrete(self.args.jpg_method)
-            qual = sample_discrete(list(range(self.args.jpg_qual[0], self.args.jpg_qual[1] + 1)))
-            img = jpeg_from_key(img, qual, method)
-        return Image.fromarray(img)
-
-def sample_continuous(s):
-    if len(s) == 1:
-        return s[0]
-    if len(s) == 2:
-        rg = s[1] - s[0]
-        return random() * rg + s[0]
-    raise ValueError("Length of iterable s should be 1 or 2.")
-
-def sample_discrete(s):
-    if len(s) == 1:
-        return s[0]
-    return choice(s)
-
-def gaussian_blur(img, sigma):
-    gaussian_filter(img[:,:,0], output=img[:,:,0], sigma=sigma)
-    gaussian_filter(img[:,:,1], output=img[:,:,1], sigma=sigma)
-    gaussian_filter(img[:,:,2], output=img[:,:,2], sigma=sigma)
+import torch
+import torch.nn.functional as F
+from torch.autograd import Variable
 
 
-def pil_jpg(img, compress_val):
-    out = BytesIO()
-    img = Image.fromarray(img)
-    img.save(out, format='jpeg', quality=compress_val)
-    img = Image.open(out)
-    # load from memory before ByteIO closes
-    img = np.array(img)
-    out.close()
-    return img
+def get_normalized_vector(d):
+    d /= torch.amax(torch.abs(d), range(1, len(d.dim())), keepdim=True)
+    d /= torch.sqrt(1e-6 + torch.sum(torch.pow(d, 2.0), range(1, len(d.dim())), keepdim=True))
+    return d
 
-def jpeg_from_key(img, compress_val, key):
 
-    return pil_jpg(img, compress_val)
+def generate_virtual_adversarial_perturbation(x, logit, model, epsilon):
+    d = torch.randn_like(x)
+
+    d = 1e-6 * get_normalized_vector(d)
+    logit_p = logit
+    d = Variable(d, requires_grad=True)
+    logit_m = model(x + d)
+    dist = kl_divergence_with_logit(logit_p, logit_m)
+    dist.backward()
+    grad = d.grad
+    model.zero_grad()
+    return epsilon * get_normalized_vector(grad)
+
+
+def virtual_adversarial_loss(x, logit, model, epsilon):
+    r_vadv = generate_virtual_adversarial_perturbation(x, logit, model, epsilon)
+    logit_p = logit
+    logit_m = model(x + r_vadv)
+    loss = kl_divergence_with_logit(logit_p, logit_m)
+    return loss
+
+
+def ce_loss(logit, y):
+    return F.binary_cross_entropy_with_logits(logit, y, reduction='mean')
+
+
+def accuracy(logit, y):
+    pred = torch.argmax(logit, dim=1)
+    true = torch.argmax(y, dim=1)
+    return torch.mean((pred == true).float())
+
+
+def logsoftmax(x):
+    xdev = x - torch.max(x, dim=1, keepdim=True)
+    lsm = xdev - torch.log(torch.sum(torch.exp(xdev), dim=1, keepdim=True))
+    return lsm
+
+
+def kl_divergence_with_logit(q_logit, p_logit):
+    q = F.softmax(q_logit, dim=1)
+    qlogq = torch.mean(torch.sum(q * logsoftmax(q_logit), dim=1))
+    qlogp = torch.mean(torch.sum(q * logsoftmax(p_logit), dim=1))
+    return qlogq - qlogp

@@ -6,18 +6,24 @@ import numpy as np
 from scalablebdl.mean_field import PsiSGD, to_bayesian, to_deterministic
 from scalablebdl.bnn_utils import Bayes_ensemble
 
+
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
     lr = args.learning_rate
     slr = args.learning_rate
     assert len(args.gammas) == len(args.schedule), \
         "length of gammas and schedule should be equal"
     for (gamma, step) in zip(args.gammas, args.schedule):
-        if (epoch >= step): slr = slr * gamma
-        else: break
+        if (epoch >= step):
+            slr = slr * gamma
+        else:
+            break
     lr = lr * np.prod(args.gammas)
-    for param_group in mu_optimizer.param_groups: param_group['lr'] = lr
-    for param_group in psi_optimizer.param_groups: param_group['lr'] = slr
+    for param_group in mu_optimizer.param_groups:
+        param_group['lr'] = lr
+    for param_group in psi_optimizer.param_groups:
+        param_group['lr'] = slr
     return lr, slr
+
 
 class Trainer(object):
     def __init__(self, device, model, tb_writer, num_label_data, args):
@@ -36,9 +42,7 @@ class Trainer(object):
         self.lr = args.learning_rate
         self.args = args
 
-
-
-        #for mi debug
+        # for mi debug
         self.total_time = 0
         self.succ_time = 0
         self.temp = 0
@@ -46,28 +50,27 @@ class Trainer(object):
     def disable_model_grad(self):
         for parameter in self.model.parameters():
             parameter.requires_grad_(False)
+
     def enable_model_grad(self):
         for parameter in self.model.parameters():
             parameter.requires_grad_(True)
 
-
-    def mutual_information(self, input:list):
-        ''' 
+    def mutual_information(self, input: list):
+        '''
         input shape : [(batch_size, num_class)] for n MC sample probabilty
         output:       MI of input
         '''
         ensemble_prob = None
         ensemble_entropy = None
-        for prob in input:  
+        for prob in input:
             ensemble_prob = prob if ensemble_prob is None else ensemble_prob + prob
-            entropy = -1* torch.sum(torch.log(prob)*prob, dim=1)
+            entropy = -1 * torch.sum(torch.log(prob) * prob, dim=1)
             ensemble_entropy = entropy if ensemble_entropy is None else ensemble_entropy + entropy
-        
+
         ensemble_entropy = ensemble_entropy / len(input)
         ensemble_prob = ensemble_prob / len(input)
-        ground_entropy = -1*torch.sum(torch.log(ensemble_prob)*ensemble_prob, dim=1)
+        ground_entropy = -1 * torch.sum(torch.log(ensemble_prob) * ensemble_prob, dim=1)
         return torch.mean(ground_entropy - ensemble_entropy)
-
 
     def fine_tune_step(self, input, target, ul_input, loss_func):
         '''
@@ -101,7 +104,6 @@ class Trainer(object):
         logit.grad.data = logit.grad.data / torch.norm(logit.grad.data, dim=(-2, -1), keepdim=True)
         logit.data = self.delta * logit.grad.data
 
-
         self.enable_model_grad()
         self.mu_optim.zero_grad()
         self.psi_optim.zero_grad()
@@ -114,7 +116,7 @@ class Trainer(object):
         # print(f"mi_aft_perturb: {mi_aft_perturb}")
         self.succ_time = self.succ_time + int(mi_aft_perturb > self.temp)
         # print(f"total time: {self.total_time}, success: {self.succ_time}")
-        
+
         output = self.model(input)
         loss = loss_func(output, target)
 
@@ -133,15 +135,15 @@ class Trainer(object):
         self.model = to_bayesian(self.model)
         mus, psis = [], []
         for name, param in self.model.named_parameters():
-            if 'psi' in name: psis.append(param)
-            else: mus.append(param)
-        self.mu_optim = torch.optim.SGD(mus, lr=self.lr, momentum=0.9, 
-                               weight_decay=2e-4, nesterov=True)
-        self.psi_optim = PsiSGD(psis, lr=self.lr, momentum=0.9, 
-                                weight_decay=2e-4, nesterov=True, 
+            if 'psi' in name:
+                psis.append(param)
+            else:
+                mus.append(param)
+        self.mu_optim = torch.optim.SGD(mus, lr=self.lr, momentum=0.9,
+                                        weight_decay=2e-4, nesterov=True)
+        self.psi_optim = PsiSGD(psis, lr=self.lr, momentum=0.9,
+                                weight_decay=2e-4, nesterov=True,
                                 num_data=self.num_label_data)
-
-    
 
     def train(self, epochs, logging_steps, train_dataloader, test_dataloader, valid_dataloader, unlabeled_train_loader):
         best_valid_acc = 0
@@ -151,7 +153,7 @@ class Trainer(object):
             unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
             cur_lr, cur_slr = adjust_learning_rate(self.mu_optim, self.psi_optim, epoch, self.args)
             print(f"current epoch: {epoch}, current lr: {cur_lr}, current slr: {cur_slr}")
-            for i, (input, target) in enumerate(train_dataloader):  
+            for i, (input, target) in enumerate(train_dataloader):
                 input = input.to(self.device)
                 target = target.to(self.device)
 
@@ -159,12 +161,11 @@ class Trainer(object):
                     unlabeled_input, _ = next(unlabeled_iter)
                     unlabeled_input = unlabeled_input.to(self.device)
                     unlabeled_input = torch.cat((input, unlabeled_input), dim=0)
-                else :
+                else:
                     unlabeled_input = input
 
                 print(input.shape)
                 print(unlabeled_input.shape)
-
 
                 loss, mi_aft_perturb, total_loss = self.fine_tune_step(input, target, unlabeled_input, loss_func)
                 if (i + 1) % logging_steps == 0:
@@ -176,7 +177,7 @@ class Trainer(object):
                     self.tb_writer.add_scalar("total loss", total_loss, global_step=i)
             valid_loss, valid_acc = Bayes_ensemble(valid_dataloader, self.model)
             print(f"epoch: {epoch}, validation loss: {valid_loss}, validation accuracy: {valid_acc}, current best validation accuracy: {best_valid_acc}")
-            if valid_acc > best_valid_acc :
+            if valid_acc > best_valid_acc:
                 print("now test on test dataset")
                 best_valid_acc = valid_acc
                 test_loss, test_acc = Bayes_ensemble(test_dataloader, self.model)

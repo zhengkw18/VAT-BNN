@@ -5,26 +5,21 @@ import torchvision.transforms as transforms
 from torch.utils.data.distributed import DistributedSampler
 
 
-def load_cifar_dataset(args):
-    mean = [x / 255 for x in [125.3, 123.0, 113.9]]
-    std = [x / 255 for x in [63.0, 62.1, 66.7]]
-    dataset = dset.CIFAR10
+def load_mnist_dataset(args):
 
+    dataset = dset.MNIST
     train_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(),
         transforms.RandomCrop(32, padding=4),
         transforms.ToTensor(),
-        transforms.Normalize(mean, std)
     ])
 
     test_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean, std)
     ])
 
     train_data = dataset(args.data_path, train=True, transform=train_transform, download=True)
     test_data = dataset(args.data_path, train=False, transform=test_transform, download=True)
-
     train_data, valid_data = torch.utils.data.random_split(train_data, lengths=[len(train_data) - round(0.1 * len(train_data)), round(0.1 * len(train_data))])
 
     total_len = len(train_data)
@@ -47,7 +42,6 @@ def load_cifar_dataset(args):
     valid_sampler = DistributedSampler(valid_data) if args.distributed else None
 
     unlabeled_batch_size = round(unlabeled_len * args.batch_size / labeled_len) - 1
-
     unlabeled_train_loader = torch.utils.data.DataLoader(unlabeled_train_data,
                                                          batch_size=unlabeled_batch_size, shuffle=(unlabeled_train_sampler is None),
                                                          num_workers=args.workers, pin_memory=True, sampler=unlabeled_train_sampler) if unlabeled_batch_size > 0 else None
