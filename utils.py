@@ -11,7 +11,6 @@ def get_normalized_vector(d):
 
 def generate_virtual_adversarial_perturbation(x, logit, model, epsilon):
     d = torch.randn_like(x)
-
     d = 1e-6 * get_normalized_vector(d)
     logit_p = logit
     d = Variable(d, requires_grad=True)
