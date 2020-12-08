@@ -25,6 +25,11 @@ def load_cifar_dataset(args):
     train_data = dataset(args.data_path, train=True, transform=train_transform, download=True)
     test_data = dataset(args.data_path, train=False, transform=test_transform, download=True)
 
+    train_data, valid_data = torch.utils.data.random_split(train_data, lengths=[len(train_data) - round(0.1 * len(train_data)), round(0.1 * len(train_data))])
+    print("Dataset: CIFAR10")
+    print(f"Training set length: {len(train_data)}")
+    print(f"Validation set length: {len(valid_data)}")
+    print(f"Testing set length: {len(test_data)}")
     total_len = len(train_data)
     if args.label_num == 0:
         unlabeled_len = 0
@@ -34,7 +39,10 @@ def load_cifar_dataset(args):
         labeled_len = args.label_num
     unlabeled_indice = []
     labeled_indice = []
-    targets = np.array(train_data.targets)
+    targets = []
+    for i in range(0, len(train_data)):
+        targets.append(train_data[i][1])
+    targets = np.array(targets)
     unlabeled_len_per_class = round(unlabeled_len / 10)
     for i in range(10):
         indices = np.where(targets == i)[0]
@@ -42,9 +50,6 @@ def load_cifar_dataset(args):
         labeled_indice = labeled_indice + indices[unlabeled_len_per_class:].tolist()
     unlabeled_train_data = torch.utils.data.Subset(train_data, unlabeled_indice)
     labeled_train_data = torch.utils.data.Subset(train_data, labeled_indice)
-    
-    labeled_train_data, valid_data = torch.utils.data.random_split(labeled_train_data, lengths=[len(labeled_train_data) - round(0.1 * len(labeled_train_data)), round(0.1 * len(labeled_train_data))])
-    labeled_len = len(labeled_train_data)
 
     labeled_train_sampler = DistributedSampler(labeled_train_data) if args.distributed else None
     unlabeled_train_sampler = DistributedSampler(unlabeled_train_data) if args.distributed else None

@@ -119,6 +119,7 @@ if __name__ == "__main__":
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 best_epoch = epoch
+                os.makedirs(args.ckpt_dir, exist_ok=True)
                 torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'best.pth'))
             print(f"best epoch: {best_epoch}")
             print(f"best validation accuracy: {best_val_acc}")

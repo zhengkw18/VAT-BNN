@@ -32,13 +32,13 @@ def virtual_adversarial_loss(x, logit, model, epsilon):
 
 
 def ce_loss(logit, y):
-    return F.binary_cross_entropy_with_logits(logit, y, reduction='mean')
+    y_one_hot = torch.zeros_like(logit).scatter_(1, y.unsqueeze(1), 1)
+    return F.binary_cross_entropy_with_logits(logit, y_one_hot, reduction='mean')
 
 
 def accuracy(logit, y):
     pred = torch.argmax(logit, dim=1)
-    true = torch.argmax(y, dim=1)
-    return torch.mean((pred == true).float())
+    return torch.mean((pred == y).float())
 
 
 def logsoftmax(x):

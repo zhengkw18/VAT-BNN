@@ -67,6 +67,6 @@ class LargeNet(nn.Module):
 
     def forward(self, x):
         x = self.layers(x)
-        x = x.mean(dim=2).mean(dim=3)
+        x = x.mean(dim=3).mean(dim=2)
         x = self.dense(x)
         return x

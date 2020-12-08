@@ -35,7 +35,10 @@ def load_mnist_dataset(args):
         labeled_len = args.label_num
     unlabeled_indice = []
     labeled_indice = []
-    targets = np.array(train_data.targets)
+    targets = []
+    for i in range(0, len(train_data)):
+        targets.append(train_data[i][1])
+    targets = np.array(targets)
     unlabeled_len_per_class = round(unlabeled_len / 10)
     for i in range(10):
         indices = np.where(targets == i)[0]
