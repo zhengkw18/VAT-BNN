@@ -4,7 +4,7 @@ import torch.optim as optim
 import os
 import argparse
 from datasets.cifar10 import load_cifar_dataset
-from datasets.mnist import load_mnist_dataset
+from datasets.minist import load_minist_dataset
 from utils import ce_loss, accuracy
 from models import SmallNet, LargeNet
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     device = torch.device('cuda')
     tb_writer = SummaryWriter(args.log_dir)
     if args.dataset == 'mnist':
-        labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_mnist_dataset(args)
+        labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_minist_dataset(args)
         model = SmallNet()
     elif args.dataset == 'cifar10':
         labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_cifar_dataset(args)
