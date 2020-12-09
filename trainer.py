@@ -37,14 +37,15 @@ class Trainer(object):
         self.psi_optim = None
         self.num_label_data = num_label_data
         self.delta = args.delta
+        self.epsilon = args.epsilon
         self.MC_Step = args.mc_step
         self.lr = args.learning_rate
         self.args = args
 
         # for mi debug
-        self.total_time = 0
-        self.succ_time = 0
-        self.temp = 0
+        # self.total_time = 0
+        # self.succ_time = 0
+        # self.temp = 0
 
     def disable_model_grad(self):
         for parameter in self.model.parameters():
@@ -85,7 +86,7 @@ class Trainer(object):
         self.model.train()
         d = torch.randn_like(ul_input)*self.delta
         d = d.requires_grad_(True)
-        self.total_time = self.total_time + 1
+        # self.total_time = self.total_time + 1
 
         self.disable_model_grad()
         with _disable_tracking_bn_stats(self.model):
@@ -96,11 +97,11 @@ class Trainer(object):
             outputs = [torch.softmax(output, dim=1) for output in outputs]
             # print(f"outouts are {outputs}")
             mi_pre_perturb = self.mutual_information(outputs)
-            self.temp = mi_pre_perturb
+            # self.temp = mi_pre_perturb
             # print(f"mi_pre_perturb: {mi_pre_perturb}")
             mi_pre_perturb.backward()
             grad = d.grad
-            r_adv = get_normalized_vector(grad)*self.delta
+            r_adv = get_normalized_vector(grad)*self.epsilon
             r_adv = r_adv.detach()
         self.enable_model_grad()
         self.mu_optim.zero_grad()
@@ -114,7 +115,7 @@ class Trainer(object):
             outputs = [torch.softmax(output, dim=1) for output in outputs]
             mi_aft_perturb = self.mutual_information(outputs)
             # print(f"mi_aft_perturb: {mi_aft_perturb}")
-            self.succ_time = self.succ_time + int(mi_aft_perturb > self.temp)
+            # self.succ_time = self.succ_time + int(mi_aft_perturb > self.temp)
             # print(f"total time: {self.total_time}, success: {self.succ_time}")
 
         output = self.model(input)
@@ -147,6 +148,7 @@ class Trainer(object):
 
     def train(self, epochs, logging_steps, train_dataloader, test_dataloader, valid_dataloader, unlabeled_train_loader):
         best_valid_acc = 0
+        best_epoch = 0
         loss_func = nn.CrossEntropyLoss()
         self.convert_to_bayesian()
         for epoch in range(epochs):
@@ -179,6 +181,9 @@ class Trainer(object):
             print(f"epoch: {epoch}, validation loss: {valid_loss}, validation accuracy: {valid_acc}, current best validation accuracy: {best_valid_acc}")
             if valid_acc > best_valid_acc:
                 print("now test on test dataset")
+                best_epoch = epoch
                 best_valid_acc = valid_acc
                 test_loss, test_acc = Bayes_ensemble(test_dataloader, self.model)
-                print(f"test loss: {test_loss}, test accuracy: {test_acc}")
+                print(f"test loss: {test_loss}, test accuracy: {test_acc}, best epoch: {best_epoch}")
+                os.makedirs(self.args.ckpt_dir, exist_ok=True)
+                torch.save(self.model.state_dict(), os.path.join(self.args.ckpt_dir, 'best.pth'))
