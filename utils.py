@@ -29,9 +29,7 @@ def generate_virtual_adversarial_perturbation(x, logit, model, epsilon):
         d.requires_grad_(True)
         logit_m = model(x + d)
         dist = kl_divergence_with_logit(logit_p, logit_m)
-        dist.backward(retain_graph=True)
-        grad = d.grad
-        model.zero_grad()
+        grad = torch.autograd.grad(dist, [d])[0]
     r_vadv = epsilon * get_normalized_vector(grad)
     return r_vadv.detach()
 
@@ -39,7 +37,7 @@ def generate_virtual_adversarial_perturbation(x, logit, model, epsilon):
 def virtual_adversarial_loss(x, logit, model, epsilon):
     r_vadv = generate_virtual_adversarial_perturbation(x, logit, model, epsilon)
     with _disable_tracking_bn_stats(model):
-        logit_p = logit
+        logit_p = logit.detach()
         logit_m = model(x + r_vadv)
         loss = kl_divergence_with_logit(logit_p, logit_m)
     if torch.isnan(loss):
