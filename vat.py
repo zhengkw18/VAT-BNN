@@ -10,6 +10,7 @@ from models import SmallNet, LargeNet
 
 
 def train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, device, epsilon):  # Training Process
+    model.train()
     tot_loss, tot_accuracy = 0.0, 0.0
     times = 0
     unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
@@ -17,7 +18,6 @@ def train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, 
         input = input.to(device)
         target = target.to(device)
         optimizer.zero_grad()
-        model.train()
         logit = model(input)
         loss = ce_loss(logit, target)
         acc = accuracy(logit, target)
@@ -27,8 +27,8 @@ def train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, 
             unlabeled_input = torch.cat((input, unlabeled_input), dim=0)
         else:
             unlabeled_input = input
-        model.eval()
-        ul_logit = model(unlabeled_input)
+        with torch.no_grad():
+            ul_logit = model(unlabeled_input)
         vat_loss = virtual_adversarial_loss(unlabeled_input, ul_logit, model, epsilon)
         loss += vat_loss
         loss.backward()

@@ -1,6 +1,18 @@
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
+import contextlib
+
+
+@contextlib.contextmanager
+def _disable_tracking_bn_stats(model):
+
+    def switch_attr(m):
+        if hasattr(m, 'track_running_stats'):
+            m.track_running_stats ^= True
+
+    model.apply(switch_attr)
+    yield
+    model.apply(switch_attr)
 
 
 def get_normalized_vector(d):
@@ -13,21 +25,23 @@ def generate_virtual_adversarial_perturbation(x, logit, model, epsilon):
     d = torch.randn_like(x)
     d = 1e-6 * get_normalized_vector(d)
     logit_p = logit
-    d = Variable(d, requires_grad=True)
-    logit_m = model(x + d)
-    dist = kl_divergence_with_logit(logit_p, logit_m)
-    dist.backward(retain_graph=True)
-    grad = d.grad
-    model.zero_grad()
+    with _disable_tracking_bn_stats(model):
+        d.requires_grad_(True)
+        logit_m = model(x + d)
+        dist = kl_divergence_with_logit(logit_p, logit_m)
+        dist.backward(retain_graph=True)
+        grad = d.grad
+        model.zero_grad()
     r_vadv = epsilon * get_normalized_vector(grad)
     return r_vadv.detach()
 
 
 def virtual_adversarial_loss(x, logit, model, epsilon):
     r_vadv = generate_virtual_adversarial_perturbation(x, logit, model, epsilon)
-    logit_p = logit
-    logit_m = model(x + r_vadv)
-    loss = kl_divergence_with_logit(logit_p, logit_m)
+    with _disable_tracking_bn_stats(model):
+        logit_p = logit
+        logit_m = model(x + r_vadv)
+        loss = kl_divergence_with_logit(logit_p, logit_m)
     if torch.isnan(loss):
         return 0
     return loss
