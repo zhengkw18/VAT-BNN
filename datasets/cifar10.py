@@ -43,11 +43,11 @@ def load_cifar_dataset(args):
     for i in range(0, len(train_data)):
         targets.append(train_data[i][1])
     targets = np.array(targets)
-    unlabeled_len_per_class = round(unlabeled_len / 10)
+    labeled_len_per_class = round(labeled_len / 10)
     for i in range(10):
         indices = np.where(targets == i)[0]
-        unlabeled_indice = unlabeled_indice + indices[0:unlabeled_len_per_class].tolist()
-        labeled_indice = labeled_indice + indices[unlabeled_len_per_class:].tolist()
+        labeled_indice = labeled_indice + indices[0: labeled_len_per_class].tolist()
+        unlabeled_indice = unlabeled_indice + indices[labeled_len_per_class:].tolist()
     unlabeled_train_data = torch.utils.data.Subset(train_data, unlabeled_indice)
     labeled_train_data = torch.utils.data.Subset(train_data, labeled_indice)
 
