@@ -5,9 +5,12 @@ class EmptyLayer(nn.Module):
     def __init__(self):
         super(EmptyLayer, self).__init__()
 
+    def forward(self, x):
+        return x
+
 
 class SmallNet(nn.Module):
-    def __init__(self, layer_sizes=[1200, 600, 300, 150, 10]):
+    def __init__(self, layer_sizes=[784, 1200, 600, 300, 150, 10]):
         super(SmallNet, self).__init__()
         self.linear_layers = []
         self.bn_layers = []
@@ -18,8 +21,12 @@ class SmallNet(nn.Module):
         for i in range(len(self.linear_layers) - 1):
             self.act_layers.append(nn.ReLU())
         self.act_layers.append(EmptyLayer())
+        self.linear_layers = nn.ModuleList(self.linear_layers)
+        self.bn_layers = nn.ModuleList(self.bn_layers)
+        self.act_layers = nn.ModuleList(self.act_layers)
 
     def forward(self, x):
+        x = x.view(x.shape[0], -1)
         for l, bn, act in zip(self.linear_layers, self.bn_layers, self.act_layers):
             x = l(x)
             x = bn(x)
