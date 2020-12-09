@@ -4,8 +4,8 @@ import os
 import numpy as np
 from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
-
-
+from torch.autograd import Variable
+from utils import get_normalized_vector
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
     lr = args.learning_rate
     slr = args.learning_rate
@@ -83,15 +83,14 @@ class Trainer(object):
         # print(f"the unlabeled input is {ul_input.sum()}")
         # print(f"the unlabeled input shape is {ul_input.shape}")
         self.model.train()
-        logit = torch.zeros_like(ul_input)
-        logit.requires_grad_(True)
+        d = torch.randn_like(ul_input)*self.delta
+        d = Variable(d, requires_grad=True)
         self.total_time = self.total_time + 1
 
         self.disable_model_grad()
-
         outputs = []
         for _ in range(self.MC_Step):
-            output = self.model(ul_input + logit)
+            output = self.model(ul_input + d)
             outputs.append(output)
         outputs = [torch.softmax(output, dim=1) for output in outputs]
         # print(f"outouts are {outputs}")
@@ -99,16 +98,16 @@ class Trainer(object):
         self.temp = mi_pre_perturb
         # print(f"mi_pre_perturb: {mi_pre_perturb}")
         mi_pre_perturb.backward()
-        logit.requires_grad_(False)
-        logit.grad.data = logit.grad.data / torch.norm(logit.grad.data, dim=(-2, -1), keepdim=True)
-        logit.data = self.delta * logit.grad.data
+        grad = d.grad
+        r_adv = get_normalized_vector(grad)*self.delta
+        r_adv = r_adv.detach()
 
         self.enable_model_grad()
         self.mu_optim.zero_grad()
         self.psi_optim.zero_grad()
         outputs = []
         for _ in range(self.MC_Step):
-            output = self.model(ul_input + logit)
+            output = self.model(ul_input + r_adv)
             outputs.append(output)
         outputs = [torch.softmax(output, dim=1) for output in outputs]
         mi_aft_perturb = self.mutual_information(outputs)
