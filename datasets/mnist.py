@@ -10,7 +10,7 @@ def load_mnist_dataset(args):
     dataset = dset.MNIST
     train_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(),
-        transforms.RandomCrop(32, padding=4),
+        transforms.RandomCrop(28, padding=4),
         transforms.ToTensor(),
     ])
 
