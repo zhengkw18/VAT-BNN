@@ -6,20 +6,20 @@ from torch.utils.data.distributed import DistributedSampler
 
 
 def load_cifar_dataset(args):
-    mean = [x / 255 for x in [125.3, 123.0, 113.9]]
-    std = [x / 255 for x in [63.0, 62.1, 66.7]]
+    # mean = [x / 255 for x in [125.3, 123.0, 113.9]]
+    # std = [x / 255 for x in [63.0, 62.1, 66.7]]
     dataset = dset.CIFAR10
 
     train_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(),
         transforms.RandomCrop(32, padding=4),
         transforms.ToTensor(),
-        transforms.Normalize(mean, std)
+        # transforms.Normalize(mean, std)
     ])
 
     test_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean, std)
+        # transforms.Normalize(mean, std)
     ])
 
     train_data = dataset(args.data_path, train=True, transform=train_transform, download=True)

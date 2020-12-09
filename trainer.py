@@ -4,8 +4,8 @@ import os
 import numpy as np
 from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
-from torch.autograd import Variable
 from utils import get_normalized_vector, _disable_tracking_bn_stats
+
 
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
     lr = args.learning_rate
@@ -85,7 +85,7 @@ class Trainer(object):
         # print(f"the unlabeled input is {ul_input.sum()}")
         # print(f"the unlabeled input shape is {ul_input.shape}")
         self.model.train()
-        d = torch.randn_like(ul_input)*self.delta
+        d = torch.randn_like(ul_input) * self.delta
         d = d.requires_grad_(True)
         # self.total_time = self.total_time + 1
 
@@ -101,7 +101,7 @@ class Trainer(object):
             # self.temp = mi_pre_perturb
             # print(f"mi_pre_perturb: {mi_pre_perturb}")
             grad = torch.autograd.grad(mi_pre_perturb, [d])[0]
-            r_adv = get_normalized_vector(grad)*self.epsilon
+            r_adv = get_normalized_vector(grad) * self.epsilon
             r_adv = r_adv.detach()
         self.enable_model_grad()
         self.mu_optim.zero_grad()
@@ -133,7 +133,7 @@ class Trainer(object):
             after the pretrain stage, convert the model to bayesian model
             follow the example given in https://github.com/thudzj/ScalableBDL
         '''
-        self.model = to_bayesian(self.model)
+        self.model.to_bayesian()
         mus, psis = [], []
         for name, param in self.model.named_parameters():
             if 'psi' in name:

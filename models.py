@@ -1,4 +1,5 @@
 import torch.nn as nn
+from scalablebdl.mean_field import to_bayesian
 
 
 class EmptyLayer(nn.Module):
@@ -32,6 +33,10 @@ class SmallNet(nn.Module):
             x = bn(x)
             x = act(x)
         return x
+
+    def to_bayesian(self):
+        self.linear_layers[-1] = to_bayesian(self.linear_layers[-1])
+        self.bn_layers[-1] = to_bayesian(self.bn_layers[-1])
 
 
 class LargeNet(nn.Module):
