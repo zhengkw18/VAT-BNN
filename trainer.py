@@ -5,7 +5,7 @@ import numpy as np
 from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
 from torch.autograd import Variable
-from utils import get_normalized_vector
+from utils import get_normalized_vector, _disable_tracking_bn_stats
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
     lr = args.learning_rate
     slr = args.learning_rate
@@ -84,36 +84,38 @@ class Trainer(object):
         # print(f"the unlabeled input shape is {ul_input.shape}")
         self.model.train()
         d = torch.randn_like(ul_input)*self.delta
-        d = Variable(d, requires_grad=True)
+        d = d.requires_grad_(True)
         self.total_time = self.total_time + 1
 
         self.disable_model_grad()
-        outputs = []
-        for _ in range(self.MC_Step):
-            output = self.model(ul_input + d)
-            outputs.append(output)
-        outputs = [torch.softmax(output, dim=1) for output in outputs]
-        # print(f"outouts are {outputs}")
-        mi_pre_perturb = self.mutual_information(outputs)
-        self.temp = mi_pre_perturb
-        # print(f"mi_pre_perturb: {mi_pre_perturb}")
-        mi_pre_perturb.backward()
-        grad = d.grad
-        r_adv = get_normalized_vector(grad)*self.delta
-        r_adv = r_adv.detach()
-
+        with _disable_tracking_bn_stats(self.model):
+            outputs = []
+            for _ in range(self.MC_Step):
+                output = self.model(ul_input + d)
+                outputs.append(output)
+            outputs = [torch.softmax(output, dim=1) for output in outputs]
+            # print(f"outouts are {outputs}")
+            mi_pre_perturb = self.mutual_information(outputs)
+            self.temp = mi_pre_perturb
+            # print(f"mi_pre_perturb: {mi_pre_perturb}")
+            mi_pre_perturb.backward()
+            grad = d.grad
+            r_adv = get_normalized_vector(grad)*self.delta
+            r_adv = r_adv.detach()
         self.enable_model_grad()
         self.mu_optim.zero_grad()
         self.psi_optim.zero_grad()
-        outputs = []
-        for _ in range(self.MC_Step):
-            output = self.model(ul_input + r_adv)
-            outputs.append(output)
-        outputs = [torch.softmax(output, dim=1) for output in outputs]
-        mi_aft_perturb = self.mutual_information(outputs)
-        # print(f"mi_aft_perturb: {mi_aft_perturb}")
-        self.succ_time = self.succ_time + int(mi_aft_perturb > self.temp)
-        # print(f"total time: {self.total_time}, success: {self.succ_time}")
+
+        with _disable_tracking_bn_stats(self.model):
+            outputs = []
+            for _ in range(self.MC_Step):
+                output = self.model(ul_input + r_adv)
+                outputs.append(output)
+            outputs = [torch.softmax(output, dim=1) for output in outputs]
+            mi_aft_perturb = self.mutual_information(outputs)
+            # print(f"mi_aft_perturb: {mi_aft_perturb}")
+            self.succ_time = self.succ_time + int(mi_aft_perturb > self.temp)
+            # print(f"total time: {self.total_time}, success: {self.succ_time}")
 
         output = self.model(input)
         loss = loss_func(output, target)
