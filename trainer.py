@@ -6,6 +6,7 @@ from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
 from torch.autograd import Variable
 from utils import get_normalized_vector, _disable_tracking_bn_stats
+
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
     lr = args.learning_rate
     slr = args.learning_rate
@@ -99,8 +100,7 @@ class Trainer(object):
             mi_pre_perturb = self.mutual_information(outputs)
             # self.temp = mi_pre_perturb
             # print(f"mi_pre_perturb: {mi_pre_perturb}")
-            mi_pre_perturb.backward()
-            grad = d.grad
+            grad = torch.autograd.grad(mi_pre_perturb, [d])[0]
             r_adv = get_normalized_vector(grad)*self.epsilon
             r_adv = r_adv.detach()
         self.enable_model_grad()
@@ -166,14 +166,14 @@ class Trainer(object):
                 else:
                     unlabeled_input = input
 
-                print(input.shape)
-                print(unlabeled_input.shape)
+                # print(input.shape)
+                # print(unlabeled_input.shape)
 
                 loss, mi_aft_perturb, total_loss = self.fine_tune_step(input, target, unlabeled_input, loss_func)
                 if (i + 1) % logging_steps == 0:
-                    print(f"classification loss: {loss}")
-                    print(f"mutual information: {mi_aft_perturb}")
-                    print(f"total loss: {total_loss}")
+                    # print(f"classification loss: {loss}")
+                    # print(f"mutual information: {mi_aft_perturb}")
+                    # print(f"total loss: {total_loss}")
                     self.tb_writer.add_scalar("classification loss ", loss, global_step=i)
                     self.tb_writer.add_scalar("mutual information", mi_aft_perturb, global_step=i)
                     self.tb_writer.add_scalar("total loss", total_loss, global_step=i)
