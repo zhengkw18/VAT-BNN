@@ -4,7 +4,7 @@ import os
 import numpy as np
 from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
-from utils import get_normalized_vector, _disable_tracking_bn_stats
+from utils import get_normalized_vector, _disable_tracking_bn_stats, ce_loss
 import torch.distributions as dist
 
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
@@ -73,54 +73,42 @@ class Trainer(object):
         ground_entropy = -1 * torch.sum(torch.log(ensemble_prob) * ensemble_prob, dim=1)
         return torch.mean(ground_entropy - ensemble_entropy)
 
-    def fine_tune_step(self, input, target, ul_input, loss_func):
+    def mc_calulate_mi(self, input):
+        outputs = []
+        for _ in self.MC_Step:
+            output = self.model(input)
+            outputs.append(output)
+        outputs = [torch.softmax(output, dim=1) for output in outputs]
+        return self.mutual_information(outputs)
+
+    def generate_mi_adversarial_perturbation(self, input):
+        d = torch.zeros_like(input)
+        d.requires_grad_(True)
+        with _disable_tracking_bn_stats(self.model):
+            mi_pre_perturb = self.mc_calulate_mi(input+d)
+            grad = torch.autograd.grad(mi_pre_perturb, [d])[0]
+        r_vadv = self.epsilon * get_normalized_vector(grad)
+        return r_vadv.detach()
+
+
+    def fine_tune_step(self, input, target, ul_input):
         '''
             1: calculate the MI of unlabeled input, then find a perturb to maximize the MI
             2: recalculate the Mi with the unlabeled input perturbed
             3: calculate the loss of labeled input data
             4: backward
         '''
-        # print(f"the input is {input.sum()}")
-        # print(f"the input shape is {input.shape}")
-        # print(f"the unlabeled input is {ul_input.sum()}")
-        # print(f"the unlabeled input shape is {ul_input.shape}")
         self.model.train()
-        d = torch.randn_like(ul_input) * self.delta
-        d = d.requires_grad_(True)
-        # self.total_time = self.total_time + 1
+        if self.args.adv_train:
+            r_adv = self.generate_mi_adversarial_perturbation(ul_input)
+        else: 
+            r_adv = torch.zeros_like(ul_input)
 
-        self.disable_model_grad()
-        with _disable_tracking_bn_stats(self.model):
-            outputs = []
-            for _ in range(self.MC_Step):
-                output = self.model(ul_input + d)
-                outputs.append(output)
-            outputs = [torch.softmax(output, dim=1) for output in outputs]
-            # print(f"outouts are {outputs}")
-            mi_pre_perturb = self.mutual_information(outputs)
-            # self.temp = mi_pre_perturb
-            # print(f"mi_pre_perturb: {mi_pre_perturb}")
-            grad = torch.autograd.grad(mi_pre_perturb, [d])[0]
-            r_adv = get_normalized_vector(grad) * self.epsilon
-            r_adv = r_adv.detach()
-        self.enable_model_grad()
         self.mu_optim.zero_grad()
         self.psi_optim.zero_grad()
-
-        with _disable_tracking_bn_stats(self.model):
-            outputs = []
-            for _ in range(self.MC_Step):
-                output = self.model(ul_input + r_adv)
-                outputs.append(output)
-            outputs = [torch.softmax(output, dim=1) for output in outputs]
-            mi_aft_perturb = self.mutual_information(outputs)
-            # print(f"mi_aft_perturb: {mi_aft_perturb}")
-            # self.succ_time = self.succ_time + int(mi_aft_perturb > self.temp)
-            # print(f"total time: {self.total_time}, success: {self.succ_time}")
-
         output = self.model(input)
-        loss = loss_func(output, target)
-
+        loss = ce_loss(output, target)
+        mi_aft_perturb = self.mc_calulate_mi(ul_input + r_adv)
         total_loss = loss + mi_aft_perturb
         total_loss.backward()
         self.mu_optim.step()
@@ -149,7 +137,6 @@ class Trainer(object):
     def train(self, epochs, logging_steps, train_dataloader, test_dataloader, valid_dataloader, unlabeled_train_loader):
         best_valid_acc = 0
         best_epoch = 0
-        loss_func = nn.CrossEntropyLoss()
         self.convert_to_bayesian()
         for epoch in range(epochs):
             unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
@@ -161,9 +148,6 @@ class Trainer(object):
             for i, (input, target) in enumerate(train_dataloader):
                 input = input.to(self.device)
                 target = target.to(self.device)
-
-
-
                 if unlabeled_iter is not None:
                     unlabeled_input, _ = next(unlabeled_iter)
                     if len(unlabeled_input) > 128 :
@@ -173,9 +157,7 @@ class Trainer(object):
                     unlabeled_input = torch.cat((input, unlabeled_input), dim=0)
                 else:
                     unlabeled_input = input
-
-
-                loss, mi_aft_perturb, total_loss = self.fine_tune_step(input, target, unlabeled_input, loss_func)
+                loss, mi_aft_perturb, total_loss = self.fine_tune_step(input, target, unlabeled_input)
                 train_loss = train_loss + loss.item()
                 train_total_loss = train_total_loss + total_loss.item()
                 train_mi = train_mi + mi_aft_perturb.item()
@@ -189,12 +171,12 @@ class Trainer(object):
             self.tb_writer.add_scalar("train total loss", train_total_loss, global_step=epoch)
             self.tb_writer.add_scalar("validation loss", valid_loss, global_step=epoch)
             self.tb_writer.add_scalar("validation accuracy", valid_acc, global_step=epoch)
-            print(f"epoch: {epoch}, validation loss: {valid_loss}, validation accuracy: {valid_acc}, current best validation accuracy: {best_valid_acc}")
+            print(f"epoch: {epoch}\n validation loss: {valid_loss}\n validation accuracy: {valid_acc}\n current best validation accuracy: {best_valid_acc}\n train loss: {train_loss}\n train mi: {train_mi}")
             if valid_acc > best_valid_acc:
-                print("now test on test dataset")
+                print("now test on test dataset:")
                 best_epoch = epoch
                 best_valid_acc = valid_acc
                 test_loss, test_acc = Bayes_ensemble(test_dataloader, self.model)
-                print(f"test loss: {test_loss}, test accuracy: {test_acc}, best epoch: {best_epoch}")
+                print(f" test loss: {test_loss}\n test accuracy: {test_acc}\n best epoch: {best_epoch}")
                 os.makedirs(self.args.ckpt_dir, exist_ok=True)
                 torch.save(self.model.state_dict(), os.path.join(self.args.ckpt_dir, 'best.pth'))

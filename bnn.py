@@ -12,6 +12,7 @@ from scalablebdl.bnn_utils import Bayes_ensemble
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--do_train', action='store_true')
+    parser.add_argument('--adv_train', action='store_true')
     parser.add_argument('--distributed', default=False, type=bool)
     parser.add_argument('--workers', default=0, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
