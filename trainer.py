@@ -75,7 +75,7 @@ class Trainer(object):
 
     def mc_calulate_mi(self, input):
         outputs = []
-        for _ in self.MC_Step:
+        for _ in range(self.MC_Step):
             output = self.model(input)
             outputs.append(output)
         outputs = [torch.softmax(output, dim=1) for output in outputs]
