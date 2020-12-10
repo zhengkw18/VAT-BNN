@@ -61,12 +61,12 @@ class Trainer(object):
         input shape : [(batch_size, num_class)] for n MC sample probabilty
         output:       MI of input
         '''
-        ensemble_prob = None
-        ensemble_entropy = None
+        ensemble_prob = 0
+        ensemble_entropy = 0
         for prob in input:
-            ensemble_prob = prob if ensemble_prob is None else ensemble_prob + prob
+            ensemble_prob = ensemble_prob + prob
             entropy = -1 * torch.sum(torch.log(prob) * prob, dim=1)
-            ensemble_entropy = entropy if ensemble_entropy is None else ensemble_entropy + entropy
+            ensemble_entropy = ensemble_entropy + entropy
 
         ensemble_entropy = ensemble_entropy / len(input)
         ensemble_prob = ensemble_prob / len(input)
