@@ -5,7 +5,7 @@ import numpy as np
 from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
 from utils import get_normalized_vector, _disable_tracking_bn_stats
-
+import torch.distributions as dist
 
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
     lr = args.learning_rate
@@ -155,29 +155,40 @@ class Trainer(object):
             unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
             cur_lr, cur_slr = adjust_learning_rate(self.mu_optim, self.psi_optim, epoch, self.args)
             print(f"current epoch: {epoch}, current lr: {cur_lr}, current slr: {cur_slr}")
+            train_loss = 0
+            train_total_loss = 0
+            train_mi = 0
             for i, (input, target) in enumerate(train_dataloader):
                 input = input.to(self.device)
                 target = target.to(self.device)
 
+
+
                 if unlabeled_iter is not None:
                     unlabeled_input, _ = next(unlabeled_iter)
+                    if len(unlabeled_input) > 128 :
+                        indice = torch.multinomial(torch.ones(len(unlabeled_input)), num_samples=128, replacement=False)
+                        unlabeled_input = unlabeled_input[indice]
                     unlabeled_input = unlabeled_input.to(self.device)
                     unlabeled_input = torch.cat((input, unlabeled_input), dim=0)
                 else:
                     unlabeled_input = input
 
-                # print(input.shape)
-                # print(unlabeled_input.shape)
 
                 loss, mi_aft_perturb, total_loss = self.fine_tune_step(input, target, unlabeled_input, loss_func)
-                if (i + 1) % logging_steps == 0:
-                    # print(f"classification loss: {loss}")
-                    # print(f"mutual information: {mi_aft_perturb}")
-                    # print(f"total loss: {total_loss}")
-                    self.tb_writer.add_scalar("classification loss ", loss, global_step=i)
-                    self.tb_writer.add_scalar("mutual information", mi_aft_perturb, global_step=i)
-                    self.tb_writer.add_scalar("total loss", total_loss, global_step=i)
+                train_loss = train_loss + loss.item()
+                train_total_loss = train_total_loss + total_loss.item()
+                train_mi = train_mi + mi_aft_perturb.item()
+
+            train_mi = train_mi/len(train_dataloader)
+            train_loss = train_loss/len(train_dataloader)
+            train_total_loss = train_total_loss/len(train_dataloader)
             valid_loss, valid_acc = Bayes_ensemble(valid_dataloader, self.model)
+            self.tb_writer.add_scalar("train classification loss ", train_loss, global_step=epoch)
+            self.tb_writer.add_scalar("train mutual information", train_mi, global_step=epoch)
+            self.tb_writer.add_scalar("train total loss", train_total_loss, global_step=epoch)
+            self.tb_writer.add_scalar("validation loss", valid_loss, global_step=epoch)
+            self.tb_writer.add_scalar("validation accuracy", valid_acc, global_step=epoch)
             print(f"epoch: {epoch}, validation loss: {valid_loss}, validation accuracy: {valid_acc}, current best validation accuracy: {best_valid_acc}")
             if valid_acc > best_valid_acc:
                 print("now test on test dataset")
