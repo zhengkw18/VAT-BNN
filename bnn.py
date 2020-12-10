@@ -59,7 +59,7 @@ if __name__ == "__main__":
         trainer = Trainer(device, net, tb_writer, num_label_data=labeled_len, args=args)
         trainer.train(args.epochs, args.logging_steps, train_dataloader=labeled_train_loader, test_dataloader=test_loader, unlabeled_train_loader=unlabeled_train_loader, valid_dataloader=valid_loader)
     else:
-        net.to_bayesian()
+        net = to_bayesian(net)
         net.load_state_dict(torch.load(os.path.join(args.ckpt_dir, 'best.pth')))
         eval_loss, eval_acc = Bayes_ensemble(test_loader, net, num_mc_samples=4)
         print('Results of mutual information bayesian training, eval loss {}, eval acc {}'.format(eval_loss, eval_acc))

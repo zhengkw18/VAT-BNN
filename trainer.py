@@ -103,7 +103,6 @@ class Trainer(object):
             r_adv = self.generate_mi_adversarial_perturbation(ul_input)
         else: 
             r_adv = torch.zeros_like(ul_input)
-
         self.mu_optim.zero_grad()
         self.psi_optim.zero_grad()
         output = self.model(input)
@@ -121,7 +120,7 @@ class Trainer(object):
             after the pretrain stage, convert the model to bayesian model
             follow the example given in https://github.com/thudzj/ScalableBDL
         '''
-        self.model.to_bayesian()
+        self.model = to_bayesian(self.model)
         mus, psis = [], []
         for name, param in self.model.named_parameters():
             if 'psi' in name:
