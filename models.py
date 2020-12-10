@@ -34,10 +34,6 @@ class SmallNet(nn.Module):
             x = act(x)
         return x
 
-    # def to_bayesian(self):
-    #     self.linear_layers[-1] = to_bayesian(self.linear_layers[-1])
-    #     self.bn_layers[-1] = to_bayesian(self.bn_layers[-1])
-
 
 class LargeNet(nn.Module):
     def __init__(self):
@@ -63,19 +59,20 @@ class LargeNet(nn.Module):
             nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.1),
-            nn.MaxPool2d(2, 2)
+            nn.MaxPool2d(2, 2),
+            
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.1)
             
         )
         self.last_feature_layers = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(0.1),
             nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.1),
             nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.1),
+            nn.LeakyReLU(0.1)
         )
         self.dense = nn.Linear(in_features=128, out_features=10)
 
@@ -85,6 +82,3 @@ class LargeNet(nn.Module):
         x = x.mean(dim=3).mean(dim=2)
         x = self.dense(x)
         return x
-net = SmallNet()
-for name, module in net.linear_layers.named_children():
-    print("child module :", name, module)
