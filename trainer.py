@@ -222,7 +222,7 @@ class Trainer(object):
         train_total_loss = train_total_loss / len(train_dataloader)
         return train_loss, train_mi, train_total_loss
 
-    def train(self, epochs, logging_steps, train_dataloader, test_dataloader, valid_dataloader, unlabeled_train_loader):
+    def train(self, epochs, train_dataloader, test_dataloader, valid_dataloader, unlabeled_train_loader):
         best_valid_acc = 0
         best_epoch = 0
         self.convert_to_bayesian()

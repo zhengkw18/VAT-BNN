@@ -19,7 +19,6 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--bnn_epochs', default=30, type=int)
-    parser.add_argument('--logging_steps', type=int, default=10)
     parser.add_argument('--mc_step', type=int, default=2)
     parser.add_argument('--saving_steps', type=int, default=1000)
     parser.add_argument('--epsilon', type=float, default=2.0)
@@ -41,7 +40,7 @@ if __name__ == "__main__":
         config = f"{args.strategy}_epochs-{args.epochs}_dataset-{args.dataset}_labeled_num-{args.label_num}_ll-{args.last_layer}"
     else:
         config = '{}_epochs-{}_bepochs-{}_dataset-{}_labeled_num-{}_epsilon-{}_ll-{}'.format(args.strategy, args.epochs, args.bnn_epochs, args.dataset, args.label_num, args.epsilon, args.last_layer)
-    print(config)
+    print(args)
     args.ckpt_dir = os.path.join(args.ckpt_dir, config)
     args.log_dir = os.path.join(args.log_dir, config)
     device = torch.device('cuda')
@@ -63,7 +62,7 @@ if __name__ == "__main__":
 
     if args.do_train:
         trainer = Trainer(device, net, tb_writer, num_label_data=labeled_len, args=args)
-        trainer.train(args.epochs, args.logging_steps, train_dataloader=labeled_train_loader, test_dataloader=test_loader, unlabeled_train_loader=unlabeled_train_loader, valid_dataloader=valid_loader)
+        trainer.train(args.epochs, train_dataloader=labeled_train_loader, test_dataloader=test_loader, unlabeled_train_loader=unlabeled_train_loader, valid_dataloader=valid_loader)
     else:
         if args.last_layer:
             net = covert_to_partial_bayesian(net, args.dataset)
