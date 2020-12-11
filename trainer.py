@@ -5,6 +5,7 @@ from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
 from utils import get_normalized_vector, _disable_tracking_bn_stats
 import torch.nn.functional as F
+from models import SmallNet, LargeNet
 
 
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
@@ -24,6 +25,40 @@ def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
         param_group['lr'] = slr
     return lr, slr
 
+def to_partial_bayesian(model):
+    for i, (name, module) in enumerate(model.named_children()):
+        if i>2 :
+            setattr(model, name, to_bayesian(module))
+        else :
+            module.requires_grad_(False)
+    return model
+
+def covert_to_partial_bayesian(model, dataset):
+    if dataset == "cifar10":
+        model.feature_layers.requires_grad_(False)
+        setattr(model, "last_feature_layers", to_bayesian(model.last_feature_layers))
+        setattr(model, "dense", to_bayesian(model.dense))
+    elif dataset == "mnist":
+        for name, module in model.named_children():
+            setattr(model, name, to_partial_bayesian(module))
+    else:
+        raise NotImplementedError()
+    return model
+
+def smallmodel_feature(model, x):
+    x = x.view(x.shape[0], -1)
+    for i in range(3):
+        x = model.linear_layers[i](x)
+        x = model.bn_layers[i](x)
+        x = model.act_layers[i](x)
+    return x
+
+def smallmodel_bayesian(model, x):
+    for i in range(3,5):
+        x = model.linear_layers[i](x)
+        x = model.bn_layers[i](x)
+        x = model.act_layers[i](x)
+    return x
 
 class Trainer(object):
     def __init__(self, device, model, tb_writer, num_label_data, args):
@@ -57,10 +92,6 @@ class Trainer(object):
             parameter.requires_grad_(True)
 
     def mutual_information(self, input: list):
-        '''
-        input shape : [(batch_size, num_class)] for n MC sample probabilty
-        output:       MI of input
-        '''
         ensemble_prob = 0
         ensemble_entropy = 0
         for prob in input:
@@ -73,11 +104,30 @@ class Trainer(object):
         ground_entropy = -1 * torch.sum(torch.log(ensemble_prob) * ensemble_prob, dim=1)
         return torch.mean(ground_entropy - ensemble_entropy)
 
+
+
     def mc_calulate_mi(self, input):
         outputs = []
-        for _ in range(self.MC_Step):
-            output = self.model(input)
-            outputs.append(output)
+        if self.args.last_layer:
+            if self.args.dataset == "mnist":
+                feature = smallmodel_feature(self.model, input)
+                for _ in range(self.MC_Step):
+                    output = smallmodel_bayesian(self.model, feature)
+                    outputs.append(output)
+            elif self.args.dataset == "cifar10":
+                feature = self.model.feature_layers(input)
+                for _ in range(self.MC_Step):
+                    output = self.model.last_feature_layers(feature)
+                    output = output.mean(dim=3).mean(dim=2)
+                    output = self.model.dense(output)
+                    outputs.append(output)
+            else:
+                raise NotImplementedError()
+        else:
+            for _ in range(self.MC_Step):
+                output = self.model(input)
+                outputs.append(output)
+
         outputs = [torch.softmax(output, dim=1) for output in outputs]
         return self.mutual_information(outputs)
 
@@ -91,14 +141,8 @@ class Trainer(object):
         return r_vadv.detach()
 
     def fine_tune_step(self, input, target, ul_input):
-        '''
-            1: calculate the MI of unlabeled input, then find a perturb to maximize the MI
-            2: recalculate the Mi with the unlabeled input perturbed
-            3: calculate the loss of labeled input data
-            4: backward
-        '''
         self.model.train()
-        if self.args.adv_train:
+        if self.args.strategy == "miadv_train":
             r_adv = self.generate_mi_adversarial_perturbation(ul_input)
         else:
             r_adv = torch.zeros_like(ul_input)
@@ -115,11 +159,10 @@ class Trainer(object):
         return loss, mi_aft_perturb, total_loss
 
     def convert_to_bayesian(self):
-        '''
-            after the pretrain stage, convert the model to bayesian model
-            follow the example given in https://github.com/thudzj/ScalableBDL
-        '''
-        self.model = to_bayesian(self.model)
+        if self.args.last_layer:
+            self.model = covert_to_partial_bayesian(self.model, self.args.dataset)
+        else :
+            self.model = to_bayesian(self.model)
         mus, psis = [], []
         for name, param in self.model.named_parameters():
             if 'psi' in name:
@@ -132,37 +175,65 @@ class Trainer(object):
                                 weight_decay=2e-4, nesterov=True,
                                 num_data=self.num_label_data)
 
+
+    def mi_train_epoch(self, epoch, train_dataloader, unlabeled_train_loader):
+        unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
+        cur_lr, cur_slr = adjust_learning_rate(self.mu_optim, self.psi_optim, epoch, self.args)
+        print(f"current epoch: {epoch}, current lr: {cur_lr}, current slr: {cur_slr}")
+        train_loss = 0
+        train_total_loss = 0
+        train_mi = 0
+        for i, (input, target) in enumerate(train_dataloader):
+            input = input.to(self.device)
+            target = target.to(self.device)
+            if unlabeled_iter is not None:
+                unlabeled_input, _ = next(unlabeled_iter)
+                if len(unlabeled_input) > 128:
+                    indice = torch.multinomial(torch.ones(len(unlabeled_input)), num_samples=128, replacement=False)
+                    unlabeled_input = unlabeled_input[indice]
+                unlabeled_input = unlabeled_input.to(self.device)
+                unlabeled_input = torch.cat((input, unlabeled_input), dim=0)
+            else:
+                unlabeled_input = input
+            loss, mi_aft_perturb, total_loss = self.fine_tune_step(input, target, unlabeled_input)
+            train_loss = train_loss + loss.item()
+            train_total_loss = train_total_loss + total_loss.item()
+            train_mi = train_mi + mi_aft_perturb.item()
+
+        train_mi = train_mi / len(train_dataloader)
+        train_loss = train_loss / len(train_dataloader)
+        train_total_loss = train_total_loss / len(train_dataloader)
+        return train_loss, train_mi, train_total_loss
+
+    def bnn_train_epoch(self, epoch, train_dataloader):
+        cur_lr, cur_slr = adjust_learning_rate(self.mu_optim, self.psi_optim, epoch, self.args)
+        print(f"current epoch: {epoch}, current lr: {cur_lr}, current slr: {cur_slr}")
+        train_loss = 0
+        train_total_loss = 0
+        train_mi = 0
+        for i, (input, target) in enumerate(train_dataloader):
+            input = input.to(self.device)
+            target = target.to(self.device)
+            output = self.model(input)
+            loss =  F.cross_entropy(output, target)
+            train_loss = train_loss + loss.item()
+        train_mi = train_mi / len(train_dataloader)
+        train_loss = train_loss / len(train_dataloader)
+        train_total_loss = train_total_loss / len(train_dataloader)
+        return train_loss, train_mi, train_total_loss
+
     def train(self, epochs, logging_steps, train_dataloader, test_dataloader, valid_dataloader, unlabeled_train_loader):
         best_valid_acc = 0
         best_epoch = 0
         self.convert_to_bayesian()
         for epoch in range(epochs):
-            unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
-            cur_lr, cur_slr = adjust_learning_rate(self.mu_optim, self.psi_optim, epoch, self.args)
-            print(f"current epoch: {epoch}, current lr: {cur_lr}, current slr: {cur_slr}")
-            train_loss = 0
-            train_total_loss = 0
-            train_mi = 0
-            for i, (input, target) in enumerate(train_dataloader):
-                input = input.to(self.device)
-                target = target.to(self.device)
-                if unlabeled_iter is not None:
-                    unlabeled_input, _ = next(unlabeled_iter)
-                    if len(unlabeled_input) > 128:
-                        indice = torch.multinomial(torch.ones(len(unlabeled_input)), num_samples=128, replacement=False)
-                        unlabeled_input = unlabeled_input[indice]
-                    unlabeled_input = unlabeled_input.to(self.device)
-                    unlabeled_input = torch.cat((input, unlabeled_input), dim=0)
+            if self.args.strategy == "bnn":
+                train_loss, train_mi, train_total_loss = self.bnn_train_epoch(epoch, train_dataloader)
+            else:
+                if epoch < self.args.bnn_epochs:
+                    train_loss, train_mi, train_total_loss = self.bnn_train_epoch(epoch, train_dataloader)
                 else:
-                    unlabeled_input = input
-                loss, mi_aft_perturb, total_loss = self.fine_tune_step(input, target, unlabeled_input)
-                train_loss = train_loss + loss.item()
-                train_total_loss = train_total_loss + total_loss.item()
-                train_mi = train_mi + mi_aft_perturb.item()
-
-            train_mi = train_mi / len(train_dataloader)
-            train_loss = train_loss / len(train_dataloader)
-            train_total_loss = train_total_loss / len(train_dataloader)
+                    train_loss, train_mi, train_total_loss = self.mi_train_epoch(epoch, train_dataloader, unlabeled_train_loader)
             valid_loss, valid_acc = Bayes_ensemble(valid_dataloader, self.model)
             self.tb_writer.add_scalar("train classification loss ", train_loss, global_step=epoch)
             self.tb_writer.add_scalar("train mutual information", train_mi, global_step=epoch)
@@ -178,3 +249,4 @@ class Trainer(object):
                 print(f" test loss: {test_loss}\n test accuracy: {test_acc}\n best epoch: {best_epoch}")
                 os.makedirs(self.args.ckpt_dir, exist_ok=True)
                 torch.save(self.model.state_dict(), os.path.join(self.args.ckpt_dir, 'best.pth'))
+

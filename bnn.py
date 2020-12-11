@@ -1,7 +1,7 @@
 import torch
 import os
 import argparse
-from trainer import Trainer
+from trainer import Trainer,covert_to_partial_bayesian
 from tensorboardX import SummaryWriter
 from datasets.cifar10 import load_cifar_dataset
 from datasets.mnist import load_mnist_dataset
@@ -12,11 +12,13 @@ from scalablebdl.bnn_utils import Bayes_ensemble
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--do_train', action='store_true')
-    parser.add_argument('--adv_train', action='store_true')
+    parser.add_argument('--last_layer', action='store_true')
+    parser.add_argument('--strategy', type=str, choices=["miadv_train", "bnn", "mipred"], default="bnn")
     parser.add_argument('--distributed', default=False, type=bool)
     parser.add_argument('--workers', default=0, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--bnn_epochs', default=30, type=int)
     parser.add_argument('--logging_steps', type=int, default=10)
     parser.add_argument('--mc_step', type=int, default=2)
     parser.add_argument('--saving_steps', type=int, default=1000)
@@ -35,7 +37,11 @@ if __name__ == "__main__":
                         help='LR for psi is multiplied by gamma on schedule')
     args = parser.parse_args()
 
-    config = 'mivat_batch-{}_epochs-{}_dataset-{}_labeled_num-{}_epsilon-{}_advtrain-{}'.format(args.batch_size, args.epochs, args.dataset, args.label_num, args.epsilon, args.adv_train)
+    if args.strategy == "bnn" or args.strategy == "mipred":
+        config = f"{args.strategy}_epochs-{args.epochs}_dataset-{args.dataset}_labeled_num-{args.label_num}_ll-{args.last_layer}"
+    else:
+        config = '{}_epochs-{}_bepochs-{}_dataset-{}_labeled_num-{}_epsilon-{}_ll-{}'.format(args.strategy, args.epochs, args.bnn_epochs, args.dataset, args.label_num, args.epsilon, args.last_layer)
+    print(config)
     args.ckpt_dir = os.path.join(args.ckpt_dir, config)
     args.log_dir = os.path.join(args.log_dir, config)
     device = torch.device('cuda')
@@ -59,7 +65,10 @@ if __name__ == "__main__":
         trainer = Trainer(device, net, tb_writer, num_label_data=labeled_len, args=args)
         trainer.train(args.epochs, args.logging_steps, train_dataloader=labeled_train_loader, test_dataloader=test_loader, unlabeled_train_loader=unlabeled_train_loader, valid_dataloader=valid_loader)
     else:
-        net = to_bayesian(net)
+        if args.last_layer:
+            net = covert_to_partial_bayesian(net, args.dataset)
+        else:
+            net = to_bayesian(net)
         net.load_state_dict(torch.load(os.path.join(args.ckpt_dir, 'best.pth')))
         eval_loss, eval_acc = Bayes_ensemble(test_loader, net, num_mc_samples=4)
         print('Results of mutual information bayesian training, eval loss {}, eval acc {}'.format(eval_loss, eval_acc))
