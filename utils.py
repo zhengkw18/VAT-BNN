@@ -16,7 +16,7 @@ def _disable_tracking_bn_stats(model):
 
 
 def get_normalized_vector(d):
-    d /= torch.amax(torch.abs(d), tuple(range(1, d.dim())), keepdim=True)
+    d /= (1e-12 + torch.amax(torch.abs(d), tuple(range(1, d.dim())), keepdim=True))
     d /= torch.sqrt(1e-6 + torch.sum(torch.pow(d, 2.0), tuple(range(1, d.dim())), keepdim=True))
     return d
 
@@ -43,11 +43,6 @@ def virtual_adversarial_loss(x, logit, model, epsilon):
     if torch.isnan(loss):
         return 0
     return loss
-
-
-def ce_loss(logit, y):
-    y_one_hot = torch.zeros_like(logit).scatter_(1, y.unsqueeze(1), 1)
-    return F.binary_cross_entropy_with_logits(logit, y_one_hot, reduction='mean')
 
 
 def accuracy(logit, y):

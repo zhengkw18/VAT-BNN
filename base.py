@@ -5,8 +5,9 @@ import os
 import argparse
 from datasets.cifar10 import load_cifar_dataset
 from datasets.mnist import load_mnist_dataset
-from utils import ce_loss, accuracy
+from utils import accuracy
 from models import SmallNet, LargeNet
+import torch.nn.functional as F
 
 
 def train_epoch(model, labeled_train_loader, optimizer, device):  # Training Process
@@ -18,7 +19,7 @@ def train_epoch(model, labeled_train_loader, optimizer, device):  # Training Pro
         target = target.to(device)
         optimizer.zero_grad()
         logit = model(input)
-        loss = ce_loss(logit, target)
+        loss = F.cross_entropy(logit, target)
         acc = accuracy(logit, target)
         loss.backward()
         optimizer.step()
@@ -39,7 +40,7 @@ def valid_epoch(model, valid_loader, device):  # Valid Process
         input = input.to(device)
         target = target.to(device)
         logit = model(input)
-        loss = ce_loss(logit, target)
+        loss = F.cross_entropy(logit, target)
         acc = accuracy(logit, target)
         times += 1
         tot_loss += loss.cpu().data.numpy()
@@ -58,7 +59,7 @@ def test_epoch(model, test_loader, device):  # Valid Process
         input = input.to(device)
         target = target.to(device)
         logit = model(input)
-        loss = ce_loss(logit, target)
+        loss = F.cross_entropy(logit, target)
         acc = accuracy(logit, target)
         times += 1
         tot_loss += loss.cpu().data.numpy()

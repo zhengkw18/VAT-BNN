@@ -1,11 +1,11 @@
 import torch
-import torch.nn as nn
 import os
 import numpy as np
 from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
-from utils import get_normalized_vector, _disable_tracking_bn_stats, ce_loss
-import torch.distributions as dist
+from utils import get_normalized_vector, _disable_tracking_bn_stats
+import torch.nn.functional as F
+
 
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
     lr = args.learning_rate
@@ -85,11 +85,10 @@ class Trainer(object):
         d = torch.zeros_like(input)
         d.requires_grad_(True)
         with _disable_tracking_bn_stats(self.model):
-            mi_pre_perturb = self.mc_calulate_mi(input+d)
+            mi_pre_perturb = self.mc_calulate_mi(input + d)
             grad = torch.autograd.grad(mi_pre_perturb, [d])[0]
         r_vadv = self.epsilon * get_normalized_vector(grad)
         return r_vadv.detach()
-
 
     def fine_tune_step(self, input, target, ul_input):
         '''
@@ -101,12 +100,12 @@ class Trainer(object):
         self.model.train()
         if self.args.adv_train:
             r_adv = self.generate_mi_adversarial_perturbation(ul_input)
-        else: 
+        else:
             r_adv = torch.zeros_like(ul_input)
         self.mu_optim.zero_grad()
         self.psi_optim.zero_grad()
         output = self.model(input)
-        loss = ce_loss(output, target)
+        loss = F.cross_entropy(output, target)
         mi_aft_perturb = self.mc_calulate_mi(ul_input + r_adv)
         total_loss = loss + mi_aft_perturb
         total_loss.backward()
@@ -149,7 +148,7 @@ class Trainer(object):
                 target = target.to(self.device)
                 if unlabeled_iter is not None:
                     unlabeled_input, _ = next(unlabeled_iter)
-                    if len(unlabeled_input) > 128 :
+                    if len(unlabeled_input) > 128:
                         indice = torch.multinomial(torch.ones(len(unlabeled_input)), num_samples=128, replacement=False)
                         unlabeled_input = unlabeled_input[indice]
                     unlabeled_input = unlabeled_input.to(self.device)
@@ -161,9 +160,9 @@ class Trainer(object):
                 train_total_loss = train_total_loss + total_loss.item()
                 train_mi = train_mi + mi_aft_perturb.item()
 
-            train_mi = train_mi/len(train_dataloader)
-            train_loss = train_loss/len(train_dataloader)
-            train_total_loss = train_total_loss/len(train_dataloader)
+            train_mi = train_mi / len(train_dataloader)
+            train_loss = train_loss / len(train_dataloader)
+            train_total_loss = train_total_loss / len(train_dataloader)
             valid_loss, valid_acc = Bayes_ensemble(valid_dataloader, self.model)
             self.tb_writer.add_scalar("train classification loss ", train_loss, global_step=epoch)
             self.tb_writer.add_scalar("train mutual information", train_mi, global_step=epoch)
