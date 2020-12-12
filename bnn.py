@@ -1,7 +1,7 @@
 import torch
 import os
 import argparse
-from trainer import Trainer,covert_to_partial_bayesian
+from trainer import Trainer, covert_to_partial_bayesian
 from tensorboardX import SummaryWriter
 from datasets.cifar10 import load_cifar_dataset
 from datasets.mnist import load_mnist_dataset
