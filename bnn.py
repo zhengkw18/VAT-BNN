@@ -20,7 +20,6 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--bnn_epochs', default=30, type=int)
     parser.add_argument('--mc_step', type=int, default=2)
-    parser.add_argument('--saving_steps', type=int, default=1000)
     parser.add_argument('--epsilon', type=float, default=2.0)
     parser.add_argument('--learning_rate', default=0.01, type=float)
     parser.add_argument('--label_num', default=0, type=int)
@@ -36,10 +35,12 @@ if __name__ == "__main__":
                         help='LR for psi is multiplied by gamma on schedule')
     args = parser.parse_args()
 
-    if args.strategy == "bnn" or args.strategy == "mipred":
+    if args.strategy == "bnn":
         config = f"{args.strategy}_epochs-{args.epochs}_dataset-{args.dataset}_labeled_num-{args.label_num}_ll-{args.last_layer}"
+    elif args.strategy == "mipred":
+        config = f"{args.strategy}_epochs-{args.epochs}_dataset-{args.dataset}_labeled_num-{args.label_num}_ll-{args.last_layer}_mc-{args.mc_step}"
     else:
-        config = '{}_epochs-{}_bepochs-{}_dataset-{}_labeled_num-{}_epsilon-{}_ll-{}'.format(args.strategy, args.epochs, args.bnn_epochs, args.dataset, args.label_num, args.epsilon, args.last_layer)
+        config = '{}_epochs-{}_bepochs-{}_dataset-{}_labeled_num-{}_epsilon-{}_ll-{}_mc-{}'.format(args.strategy, args.epochs, args.bnn_epochs, args.dataset, args.label_num, args.epsilon, args.last_layer, args.mv_step)
     print(args)
     args.ckpt_dir = os.path.join(args.ckpt_dir, config)
     args.log_dir = os.path.join(args.log_dir, config)

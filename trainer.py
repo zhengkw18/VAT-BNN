@@ -141,7 +141,6 @@ class Trainer(object):
         return r_vadv.detach()
 
     def fine_tune_step(self, input, target, ul_input):
-        self.model.train()
         if self.args.strategy == "miadv_train":
             r_adv = self.generate_mi_adversarial_perturbation(ul_input)
         else:
@@ -177,6 +176,7 @@ class Trainer(object):
 
 
     def mi_train_epoch(self, epoch, train_dataloader, unlabeled_train_loader):
+        self.model.train()
         unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
         cur_lr, cur_slr = adjust_learning_rate(self.mu_optim, self.psi_optim, epoch, self.args)
         print(f"current epoch: {epoch}, current lr: {cur_lr}, current slr: {cur_slr}")
@@ -188,8 +188,8 @@ class Trainer(object):
             target = target.to(self.device)
             if unlabeled_iter is not None:
                 unlabeled_input, _ = next(unlabeled_iter)
-                if len(unlabeled_input) > 128:
-                    indice = torch.multinomial(torch.ones(len(unlabeled_input)), num_samples=128, replacement=False)
+                if len(unlabeled_input) > 256:
+                    indice = torch.multinomial(torch.ones(len(unlabeled_input)), num_samples=256, replacement=False)
                     unlabeled_input = unlabeled_input[indice]
                 unlabeled_input = unlabeled_input.to(self.device)
                 unlabeled_input = torch.cat((input, unlabeled_input), dim=0)
@@ -206,6 +206,7 @@ class Trainer(object):
         return train_loss, train_mi, train_total_loss
 
     def bnn_train_epoch(self, epoch, train_dataloader):
+        self.model.train()
         cur_lr, cur_slr = adjust_learning_rate(self.mu_optim, self.psi_optim, epoch, self.args)
         print(f"current epoch: {epoch}, current lr: {cur_lr}, current slr: {cur_slr}")
         train_loss = 0
