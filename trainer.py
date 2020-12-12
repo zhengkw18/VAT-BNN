@@ -25,13 +25,15 @@ def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):
         param_group['lr'] = slr
     return lr, slr
 
+
 def to_partial_bayesian(model):
     for i, (name, module) in enumerate(model.named_children()):
-        if i>2 :
+        if i > 2:
             setattr(model, name, to_bayesian(module))
-        else :
+        else:
             module.requires_grad_(False)
     return model
+
 
 def covert_to_partial_bayesian(model, dataset):
     if dataset == "cifar10":
@@ -45,6 +47,7 @@ def covert_to_partial_bayesian(model, dataset):
         raise NotImplementedError()
     return model
 
+
 def smallmodel_feature(model, x):
     x = x.view(x.shape[0], -1)
     for i in range(3):
@@ -53,12 +56,14 @@ def smallmodel_feature(model, x):
         x = model.act_layers[i](x)
     return x
 
+
 def smallmodel_bayesian(model, x):
-    for i in range(3,5):
+    for i in range(3, 5):
         x = model.linear_layers[i](x)
         x = model.bn_layers[i](x)
         x = model.act_layers[i](x)
     return x
+
 
 class Trainer(object):
     def __init__(self, device, model, tb_writer, num_label_data, args):
@@ -103,8 +108,6 @@ class Trainer(object):
         ensemble_prob = ensemble_prob / len(input)
         ground_entropy = -1 * torch.sum(torch.log(ensemble_prob) * ensemble_prob, dim=1)
         return torch.mean(ground_entropy - ensemble_entropy)
-
-
 
     def mc_calulate_mi(self, input):
         outputs = []
@@ -161,7 +164,7 @@ class Trainer(object):
     def convert_to_bayesian(self):
         if self.args.last_layer:
             self.model = covert_to_partial_bayesian(self.model, self.args.dataset)
-        else :
+        else:
             self.model = to_bayesian(self.model)
         mus, psis = [], []
         for name, param in self.model.named_parameters():
@@ -174,7 +177,6 @@ class Trainer(object):
         self.psi_optim = PsiSGD(psis, lr=self.lr, momentum=0.9,
                                 weight_decay=2e-4, nesterov=True,
                                 num_data=self.num_label_data)
-
 
     def mi_train_epoch(self, epoch, train_dataloader, unlabeled_train_loader):
         unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
@@ -215,7 +217,7 @@ class Trainer(object):
             input = input.to(self.device)
             target = target.to(self.device)
             output = self.model(input)
-            loss =  F.cross_entropy(output, target)
+            loss = F.cross_entropy(output, target)
             train_loss = train_loss + loss.item()
         train_mi = train_mi / len(train_dataloader)
         train_loss = train_loss / len(train_dataloader)
@@ -249,4 +251,3 @@ class Trainer(object):
                 print(f" test loss: {test_loss}\n test accuracy: {test_acc}\n best epoch: {best_epoch}")
                 os.makedirs(self.args.ckpt_dir, exist_ok=True)
                 torch.save(self.model.state_dict(), os.path.join(self.args.ckpt_dir, 'best.pth'))
-
