@@ -14,7 +14,8 @@ from scalablebdl.mean_field import to_bayesian
 from scalablebdl.bnn_utils import unfreeze, freeze
 
 eps_plot = [0.1, 1, 5, 8, 20, 50, 100]
-eps_curve = [10**(-1.0), 10**(-0.5), 10**0.0, 10**0.5, 10**1.0, 10**1.5, 10**2.0, 10**2.5, 10**3.0]
+eps_curve = [0, 10**(-1.0), 10**(-0.5), 10**0.0, 10**0.5, 10**1.0, 10**1.5, 10**2.0, 10**2.5, 10**3.0]
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -48,7 +49,10 @@ if __name__ == "__main__":
         model = to_bayesian(model)
     model.load_state_dict(torch.load(os.path.join(args.ckpt_dir, os.path.join(args.pretrain_config, 'best.pth'))))
     model.eval()
-
+    if args.bayes and args.method != 'mi':
+        freeze(model)
+    elif not args.bayes and args.method == 'mi':
+        model = to_bayesian(model)
     if args.plot:
         images = []
         for i, (input, target) in enumerate(test_loader):
@@ -71,4 +75,27 @@ if __name__ == "__main__":
         torchvision.utils.save_image(images.cpu(), 'noise.png')
 
     else:
-        pass
+        accs = []
+        for eps in eps_curve:
+            tot_accuracy = 0.0
+            times = 0
+            for i, (input, target) in enumerate(test_loader):
+                input = input.to(device)
+                target = target.to(device)
+                if args.method == 'at':
+                    r_adv = generate_adversarial_perturbation(input, target, model, eps)
+                elif args.method == 'vat':
+                    with torch.no_grad():
+                        logit = model(input)
+                    r_adv = generate_virtual_adversarial_perturbation(input, logit, model, eps)
+                else:
+                    r_adv = generate_mi_adv_target(model, input, eps)
+                freeze(model)
+                with torch.no_grad():
+                    logit = model(input + r_adv)
+                unfreeze(model)
+                acc = accuracy(logit, target)
+                times += 1
+                tot_accuracy += acc.cpu().data.numpy()
+            tot_accuracy /= times
+            print(f'eps: {eps}, acc: {tot_accuracy}')
