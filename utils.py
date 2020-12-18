@@ -72,8 +72,7 @@ def mutual_information(p_logit, q_logit):
 
 
 def generate_mi_adv_target(model, input, epsilon):
-    d = torch.randn_like(input)
-    d = 1e-6 * get_normalized_vector(d)
+    d = torch.zeros_like(input)
     d.requires_grad_(True)
     with _disable_tracking_bn_stats(model):
         p_logit = model(input + d)

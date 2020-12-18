@@ -10,8 +10,11 @@ from models import SmallNet, LargeNet
 import torch.nn.functional as F
 import torchvision
 from utils import generate_adversarial_perturbation, generate_virtual_adversarial_perturbation, generate_mi_adv_target
+from scalablebdl.mean_field import to_bayesian
+from scalablebdl.bnn_utils import unfreeze, freeze
 
-eps_candidates = [10**(-1.0), 10**(-0.5), 10**0.0, 10**0.5, 10**1.0, 10**1.5, 10**2.0, 10**2.5, 10**3.0]
+eps_plot = [0.1, 1, 5, 8, 20, 50, 100]
+eps_curve = [10**(-1.0), 10**(-0.5), 10**0.0, 10**0.5, 10**1.0, 10**1.5, 10**2.0, 10**2.5, 10**3.0]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -41,6 +44,8 @@ if __name__ == "__main__":
         print("Unsupported dataset.")
         exit(0)
     model.to(device)
+    if args.bayes:
+        model = to_bayesian(model)
     model.load_state_dict(torch.load(os.path.join(args.ckpt_dir, os.path.join(args.pretrain_config, 'best.pth'))))
     model.eval()
 
@@ -49,8 +54,8 @@ if __name__ == "__main__":
         for i, (input, target) in enumerate(test_loader):
             input = input.to(device)[:10]
             target = target.to(device)[:10]
-            for j in range(0, 9, 2):
-                eps = eps_candidates[j]
+            for j in range(7):
+                eps = eps_plot[j]
                 if args.method == 'at':
                     r_adv = generate_adversarial_perturbation(input, target, model, eps)
                 elif args.method == 'vat':
