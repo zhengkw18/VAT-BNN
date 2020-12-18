@@ -18,17 +18,17 @@ def cal_consistency_weight(epoch, init_ep=0, end_ep=300, init_w=0.0, end_w=20.0)
     elif epoch < init_ep:
         weight_cl = init_w
     else:
-        T = float(epoch - init_ep)/float(end_ep - init_ep)
-        #weight_mse = T * (end_w - init_w) + init_w #linear
-        weight_cl = (math.exp(-5.0 * (1.0 - T) * (1.0 - T))) * (end_w - init_w) + init_w #exp
-    #print('Consistency weight: %f'%weight_cl)
+        T = float(epoch - init_ep) / float(end_ep - init_ep)
+        # weight_mse = T * (end_w - init_w) + init_w #linear
+        weight_cl = (math.exp(-5.0 * (1.0 - T) * (1.0 - T))) * (end_w - init_w) + init_w  # exp
+    # print('Consistency weight: %f'%weight_cl)
     return weight_cl
 
 
 def pi_smallnet_forward(net, input, device):
     input = input.contiguous().view(input.shape[0], -1)
     if net.training:
-        delta = torch.randn_like(input)*0.01
+        delta = torch.randn_like(input) * 0.01
     else:
         delta = torch.zeros_like(input)
     input = input + delta
@@ -38,18 +38,19 @@ def pi_smallnet_forward(net, input, device):
         input = net.act_layers[i](input)
     # add dropout
     input = F.dropout(input=input, p=0.5, training=net.training)
-    for i in range(4,5):
+    for i in range(4, 5):
         input = net.linear_layers[i](input)
         input = net.bn_layers[i](input)
         input = net.act_layers[i](input)
     return input
 
 
-def train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, device, epoch):  # Training Process
+def train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, device, epoch, max_epoch):  # Training Process
     model.train()
     tot_loss, tot_accuracy = 0.0, 0.0
     times = 0
     unlabeled_iter = iter(unlabeled_train_loader) if unlabeled_train_loader is not None else None
+    len_iter = len(iter(labeled_train_loader))
     for i, (input, target) in enumerate(labeled_train_loader):
         input = input.to(device)
         input_shape = input.shape
@@ -62,11 +63,11 @@ def train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, 
         with _disable_tracking_bn_stats(model):
             with torch.no_grad():
                 logit1 = pi_smallnet_forward(model, input, device)
-        diff = F.mse_loss(logit.softmax(dim=-1), logit1.softmax(dim=-1), reduction='mean')/10
-        weight = cal_consistency_weight(epoch)
+        diff = F.mse_loss(logit, logit1, reduction='mean') / 10
+        weight = cal_consistency_weight(epoch * len_iter + i, end_ep=(max_epoch // 2) * len_iter, end_w=1.0)
         logit = logit[:input_shape[0]]
         loss = F.cross_entropy(logit, target)
-        loss = loss + diff*weight*20.0
+        loss = loss + diff * weight * 10.0
         acc = accuracy(logit, target)
         loss.backward()
         optimizer.step()
@@ -152,7 +153,7 @@ if __name__ == "__main__":
         best_epoch = 0
         for epoch in range(args.epochs):
             print(f"Epoch: {epoch}")
-            train_loss, train_acc = train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, device, epoch)
+            train_loss, train_acc = train_epoch(model, labeled_train_loader, unlabeled_train_loader, optimizer, device, epoch, args.epochs)
             val_loss, val_acc = valid_epoch(model, valid_loader, device)
             print(f"training loss: {train_loss}")
             print(f"training accuracy: {train_acc}")
