@@ -48,7 +48,7 @@ def virtual_adversarial_loss(x, logit, model, epsilon):
 def generate_adversarial_perturbation(x, target, model, epsilon):
     with _disable_tracking_bn_stats(model):
         x.requires_grad_(True)
-        logit = model(input)
+        logit = model(x)
         loss = F.cross_entropy(logit, target)
         grad = torch.autograd.grad(loss, [x])[0]
     r_vadv = epsilon * get_normalized_vector(grad)

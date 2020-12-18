@@ -20,14 +20,16 @@ if __name__ == "__main__":
     parser.add_argument('--bayes', default=False, type=bool)
     parser.add_argument('--workers', default=0, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--method', default='vat', type=int, choices=["at", "vat", "mi"])
+    parser.add_argument('--method', default='vat', type=str, choices=["at", "vat", "mi"])
     parser.add_argument('--data_path', default='./data', type=str, help='The path of the data directory')
     parser.add_argument('--ckpt_dir', default='./ckpt', type=str, help='The path of the checkpoint directory')
     parser.add_argument('--log_dir', default='./log', type=str)
     parser.add_argument('--dataset', default='cifar10', type=str)
+    parser.add_argument('--label_num', default=0, type=int)
+    parser.add_argument('--distributed', default=False, type=bool)
     args = parser.parse_args()
-    args.ckpt_dir = os.path.join(args.ckpt_dir, args.pretrain_config)
-    args.log_dir = os.path.join(args.log_dir, args.pretrain_config)
+    # args.ckpt_dir = os.path.join(args.ckpt_dir, args.pretrain_config)
+    # args.log_dir = os.path.join(args.log_dir, args.pretrain_config)
     device = torch.device('cuda')
     if args.dataset == 'mnist':
         labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_mnist_dataset(args)
@@ -45,8 +47,8 @@ if __name__ == "__main__":
     if args.plot:
         images = []
         for i, (input, target) in enumerate(test_loader):
-            input = input.to(device)[:5]
-            target = target.to(device)[:5]
+            input = input.to(device)[:10]
+            target = target.to(device)[:10]
             for j in range(0, 9, 2):
                 eps = eps_candidates[j]
                 if args.method == 'at':
@@ -60,7 +62,7 @@ if __name__ == "__main__":
                 images.append(input + r_adv)
             break
         images = torch.cat(images, dim=0)
-        images = torchvision.utils.make_grid(images, nrow=5, padding=2, pad_value=255)
+        images = torchvision.utils.make_grid(images, nrow=10, padding=2, pad_value=255)
         torchvision.utils.save_image(images.cpu(), 'noise.png')
 
     else:
