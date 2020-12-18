@@ -5,7 +5,6 @@ from scalablebdl.mean_field import PsiSGD, to_bayesian
 from scalablebdl.bnn_utils import Bayes_ensemble
 from utils import get_normalized_vector, _disable_tracking_bn_stats
 import torch.nn.functional as F
-from models import SmallNet, LargeNet
 
 
 def adjust_learning_rate(mu_optimizer, psi_optimizer, epoch, args):

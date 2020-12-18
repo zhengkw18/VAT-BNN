@@ -9,7 +9,6 @@ from utils import accuracy
 from models import SmallNet, LargeNet
 import torch.nn.functional as F
 from scalablebdl.mean_field import to_bayesian, PsiSGD
-from scalablebdl.bnn_utils import freeze
 
 
 def train_epoch(model, labeled_train_loader, mi_optimizer, psi_optimizer, device):  # Training Process
@@ -111,9 +110,9 @@ if __name__ == "__main__":
             mus.append(param)
     mu_optimizer = optim.Adam(mus, lr=args.learning_rate)
     psi_optimizer = PsiSGD(psis, lr=args.learning_rate, momentum=0.9,
-                                weight_decay=2e-4, nesterov=True,
-                                num_data=len(labeled_train_loader))
-    
+                           weight_decay=2e-4, nesterov=True,
+                           num_data=len(labeled_train_loader))
+
     # freeze(model)
     if args.do_train:
         best_val_acc = 0

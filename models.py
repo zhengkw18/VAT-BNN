@@ -60,11 +60,11 @@ class LargeNet(nn.Module):
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.1),
             nn.MaxPool2d(2, 2),
-            
+
             nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.1)
-            
+
         )
         self.last_feature_layers = nn.Sequential(
             nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, stride=1, padding=1),

@@ -5,53 +5,12 @@ import os
 import argparse
 from datasets.cifar10_ssl import load_cifar_dataset
 from datasets.mnist_ssl import load_mnist_dataset
-from utils import accuracy, _disable_tracking_bn_stats, logsoftmax, get_normalized_vector
+from utils import accuracy
 from models import SmallNet, LargeNet
 import torch.nn.functional as F
 from scalablebdl.mean_field import to_bayesian, PsiSGD
-from scalablebdl.bnn_utils import freeze, unfreeze
-
-
-def entropy(logit):
-    p = F.softmax(logit, dim=-1)
-    logp = logsoftmax(logit)
-    return -1*torch.sum(p*logp, dim=-1)
-
-def mutual_information(p_logit, q_logit):
-    p = F.softmax(p_logit, dim=-1)
-    q = F.softmax(q_logit, dim=-1)
-    p_mean = (p + q)/2.0
-    ent_p_mean = entropy(torch.log(p_mean))
-    entp = entropy(p_logit)
-    entq = entropy(q_logit)
-    return torch.mean(ent_p_mean - (entp + entq)/2.0, dim=0)
-
-
-def generate_mi_adv_target(model, input, epsilon):
-    d = torch.zeros_like(input)
-    d.requires_grad_(True)
-    with _disable_tracking_bn_stats(model):
-        p_logit = model(input+d)
-        q_logit = model(input+d)
-        mi = mutual_information(p_logit, q_logit)
-        grad = torch.autograd.grad(mi, [d])[0]
-    r_vadv = epsilon * get_normalized_vector(grad)
-    return r_vadv.detach()
-
-
-
-def mi_adversarial_loss(model, input, epsilon, adv_target=False):
-    if adv_target:
-        r_adv = generate_mi_adv_target(model, input, epsilon)
-    else:
-        r_adv = torch.zeros_like(input)
-    with _disable_tracking_bn_stats(model):
-        logit_p = model(input+r_adv)
-        logit_q = model(input+r_adv)
-        loss = mutual_information(logit_p, logit_q)
-    if torch.isnan(loss):
-        return 0
-    return loss
+from utils import mi_adversarial_loss
+from scalablebdl.bnn_utils import unfreeze
 
 
 def train_ssl_epoch(model, labeled_train_loader, unlabeled_train_loader, mi_optimizer, psi_optimizer, device, epsilon, adv_target=False):
@@ -110,7 +69,6 @@ def train_epoch(model, labeled_train_loader, mi_optimizer, psi_optimizer, device
         loss.backward()
         mi_optimizer.step()
         psi_optimizer.step()
-
 
         times += 1
         tot_loss += loss.cpu().data.numpy()
@@ -213,9 +171,9 @@ if __name__ == "__main__":
             mus.append(param)
     mu_optimizer = optim.Adam(mus, lr=args.learning_rate)
     psi_optimizer = PsiSGD(psis, lr=args.learning_rate, momentum=0.9,
-                                weight_decay=2e-4, nesterov=True,
-                                num_data=len(labeled_train_loader))
-    
+                           weight_decay=2e-4, nesterov=True,
+                           num_data=len(labeled_train_loader))
+
     if args.do_train:
         best_val_acc = 0
         best_epoch = 0
@@ -224,7 +182,8 @@ if __name__ == "__main__":
             if args.label_num == 0:
                 train_loss, train_acc, train_mi = train_epoch(model, labeled_train_loader, mu_optimizer, psi_optimizer, device, args.epsilon, (args.strategy == "miadv_train"))
             else:
-                train_loss, train_acc, train_mi = train_ssl_epoch(model, labeled_train_loader, unlabeled_train_loader, mu_optimizer, psi_optimizer, device, args.epsilon, (args.strategy == "miadv_train"))
+                train_loss, train_acc, train_mi = train_ssl_epoch(model, labeled_train_loader, unlabeled_train_loader, mu_optimizer,
+                                                                  psi_optimizer, device, args.epsilon, (args.strategy == "miadv_train"))
             val_loss, val_acc = valid_epoch(model, valid_loader, device)
             print(f"training loss: {train_loss}")
             print(f"training accuracy: {train_acc}")

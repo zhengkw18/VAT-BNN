@@ -45,6 +45,56 @@ def virtual_adversarial_loss(x, logit, model, epsilon):
     return loss
 
 
+def generate_adversarial_perturbation(x, loss, model, epsilon):
+    with _disable_tracking_bn_stats(model):
+        x.requires_grad_(True)
+        grad = torch.autograd.grad(loss, [x])[0]
+    r_vadv = epsilon * get_normalized_vector(grad)
+    return r_vadv.detach()
+
+
+def entropy(logit):
+    p = F.softmax(logit, dim=-1)
+    logp = logsoftmax(logit)
+    return -1 * torch.sum(p * logp, dim=-1)
+
+
+def mutual_information(p_logit, q_logit):
+    p = F.softmax(p_logit, dim=-1)
+    q = F.softmax(q_logit, dim=-1)
+    p_mean = (p + q) / 2.0
+    ent_p_mean = entropy(torch.log(p_mean))
+    entp = entropy(p_logit)
+    entq = entropy(q_logit)
+    return torch.mean(ent_p_mean - (entp + entq) / 2.0, dim=0)
+
+
+def generate_mi_adv_target(model, input, epsilon):
+    d = torch.zeros_like(input)
+    d.requires_grad_(True)
+    with _disable_tracking_bn_stats(model):
+        p_logit = model(input + d)
+        q_logit = model(input + d)
+        mi = mutual_information(p_logit, q_logit)
+        grad = torch.autograd.grad(mi, [d])[0]
+    r_vadv = epsilon * get_normalized_vector(grad)
+    return r_vadv.detach()
+
+
+def mi_adversarial_loss(model, input, epsilon, adv_target=False):
+    if adv_target:
+        r_adv = generate_mi_adv_target(model, input, epsilon)
+    else:
+        r_adv = torch.zeros_like(input)
+    with _disable_tracking_bn_stats(model):
+        logit_p = model(input + r_adv)
+        logit_q = model(input + r_adv)
+        loss = mutual_information(logit_p, logit_q)
+    if torch.isnan(loss):
+        return 0
+    return loss
+
+
 def accuracy(logit, y):
     pred = torch.argmax(logit, dim=1)
     return torch.mean((pred == y).float())
