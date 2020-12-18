@@ -45,9 +45,11 @@ def virtual_adversarial_loss(x, logit, model, epsilon):
     return loss
 
 
-def generate_adversarial_perturbation(x, loss, model, epsilon):
+def generate_adversarial_perturbation(x, target, model, epsilon):
     with _disable_tracking_bn_stats(model):
         x.requires_grad_(True)
+        logit = model(input)
+        loss = F.cross_entropy(logit, target)
         grad = torch.autograd.grad(loss, [x])[0]
     r_vadv = epsilon * get_normalized_vector(grad)
     return r_vadv.detach()
@@ -70,7 +72,8 @@ def mutual_information(p_logit, q_logit):
 
 
 def generate_mi_adv_target(model, input, epsilon):
-    d = torch.zeros_like(input)
+    d = torch.randn_like(input)
+    d = 1e-6 * get_normalized_vector(d)
     d.requires_grad_(True)
     with _disable_tracking_bn_stats(model):
         p_logit = model(input + d)
