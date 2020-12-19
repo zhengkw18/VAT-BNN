@@ -1,20 +1,17 @@
-from tensorboardX import SummaryWriter
 import torch
-import torch.optim as optim
 import os
 import argparse
 from datasets.cifar10 import load_cifar_dataset
 from datasets.mnist import load_mnist_dataset
 from utils import accuracy
 from models import SmallNet, LargeNet
-import torch.nn.functional as F
 import torchvision
 from utils import generate_adversarial_perturbation, generate_virtual_adversarial_perturbation, generate_mi_adv_target
 from scalablebdl.mean_field import to_bayesian
 from scalablebdl.bnn_utils import unfreeze, freeze
+import numpy as np
 
 eps_plot = [0.1, 1, 5, 8, 20, 50, 100]
-eps_curve = [0, 10**(-1.0), 10**(-0.5), 10**0.0, 10**0.5, 10**1.0, 10**1.5, 10**2.0, 10**2.5, 10**3.0]
 
 
 if __name__ == "__main__":
@@ -76,7 +73,7 @@ if __name__ == "__main__":
 
     else:
         accs = []
-        for eps in eps_curve:
+        for eps in np.arange(0, 5, 0.1):
             tot_accuracy = 0.0
             times = 0
             for i, (input, target) in enumerate(test_loader):
@@ -93,9 +90,13 @@ if __name__ == "__main__":
                 freeze(model)
                 with torch.no_grad():
                     logit = model(input + r_adv)
-                unfreeze(model)
+                if args.method == 'mi':
+                    unfreeze(model)
                 acc = accuracy(logit, target)
                 times += 1
                 tot_accuracy += acc.cpu().data.numpy()
             tot_accuracy /= times
             print(f'eps: {eps}, acc: {tot_accuracy}')
+            accs.append(tot_accuracy)
+        mis_acc = [accs[0] - accs[i] for i in range(1, len(accs))]
+        print(mis_acc)
