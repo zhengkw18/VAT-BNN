@@ -66,6 +66,8 @@ def mutual_information(p_logit, q_logit):
     q = F.softmax(q_logit, dim=-1)
     p_mean = (p + q) / 2.0
     ent_p_mean = entropy(torch.log(p_mean))
+    # softmax_var = ((p - p_mean)**2 + (q - p_mean)**2) / 2
+    # print(softmax_var.mean())
     entp = entropy(p_logit)
     entq = entropy(q_logit)
     return torch.mean(ent_p_mean - (entp + entq) / 2.0, dim=0)
