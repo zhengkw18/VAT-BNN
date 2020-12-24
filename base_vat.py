@@ -73,6 +73,8 @@ def train_and_evaluate(args, model, optimizer, dataloaders):
                 best_step = step
                 os.makedirs(args.ckpt_dir, exist_ok=True)
                 torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'best.pth'))
+            print(f"training ce loss: {ce}")
+            print(f"training vat loss: {vat}")
             print(f"validation accuracy: {val_acc}")
             print(f"best step: {best_step}")
             print(f"best validation accuracy: {best_val_acc}")
@@ -89,7 +91,6 @@ if __name__ == "__main__":
     parser.add_argument('--epsilon', type=float, default=2.0)
     parser.add_argument('--learning_rate', default=0.001, type=float)
     parser.add_argument('--label_num', default=0, type=int)
-    parser.add_argument('--val_len', default=1000, type=int)
     parser.add_argument('--data_path', default='./data', type=str, help='The path of the data directory')
     parser.add_argument('--ckpt_dir', default='./ckpt', type=str, help='The path of the checkpoint directory')
     parser.add_argument('--log_dir', default='./log', type=str)
@@ -111,7 +112,7 @@ if __name__ == "__main__":
     else:
         print("Unsupported dataset.")
         exit(0)
-    model.cuda()
+    model = model.cuda()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     if args.do_train:
         train_and_evaluate(args, model, optimizer, dataloaders)

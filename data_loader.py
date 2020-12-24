@@ -47,7 +47,7 @@ def fetch_dataloaders_MNIST(args):
 
     train_dataset = torchvision.datasets.MNIST(args.data_path, train=True, transform=transforms.ToTensor(), download=True)
     test_dataset = torchvision.datasets.MNIST(args.data_path, train=False, transform=transforms.ToTensor(), download=True)
-    labels_set, unlabels_set, val_set = split_datasets(train_dataset, args.label_num, args.val_len)
+    labels_set, unlabels_set, val_set = split_datasets(train_dataset, args.label_num, 1000)
 
     print("Dataset: MNIST")
     print(f"Label set length: {len(labels_set)}")
@@ -75,7 +75,7 @@ def fetch_dataloaders_CIFAR10(args):
 
     train_dataset = torchvision.datasets.CIFAR10(args.data_path, train=True, transform=transforms.ToTensor(), download=True)
     test_dataset = torchvision.datasets.CIFAR10(args.data_path, train=False, transform=transforms.ToTensor(), download=True)
-    labels_set, unlabels_set, val_set = split_datasets(train_dataset, args.label_num, args.val_len)
+    labels_set, unlabels_set, val_set = split_datasets(train_dataset, args.label_num, 10000)
 
     print("Dataset: CIFAR10")
     print(f"Label set length: {len(labels_set)}")

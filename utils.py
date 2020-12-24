@@ -85,18 +85,22 @@ def generate_mi_adv_target(model, input, epsilon):
     return r_vadv.detach()
 
 
-def mi_adversarial_loss(model, input, epsilon, adv_target=False):
+def mi_adversarial_loss(model, input, logit, epsilon, adv_target=False):
+    kl_loss, mi_loss = 0.0, 0.0
     if adv_target:
         r_adv = generate_mi_adv_target(model, input, epsilon)
     else:
         r_adv = torch.zeros_like(input)
     with _disable_tracking_bn_stats(model):
-        logit_p = model(input + r_adv)
         logit_q = model(input + r_adv)
-        loss = mutual_information(logit_p, logit_q)
-    if torch.isnan(loss):
-        return 0
-    return loss
+        if adv_target:
+            logit_p = model(input + r_adv)
+            mi_loss = mutual_information(logit_p, logit_q)
+            kl_loss = (kl_divergence_with_logit(logit, logit_p) + kl_divergence_with_logit(logit, logit_q)) / 2
+        else:
+            mi_loss = mutual_information(logit, logit_q)
+            kl_loss = torch.zeros_like(mi_loss)
+    return mi_loss, kl_loss
 
 
 def accuracy(logit, y):
