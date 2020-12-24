@@ -19,9 +19,7 @@ def cal_consistency_weight(epoch, init_ep=0, end_ep=300, init_w=0.0, end_w=20.0)
         weight_cl = init_w
     else:
         T = float(epoch - init_ep) / float(end_ep - init_ep)
-        # weight_mse = T * (end_w - init_w) + init_w #linear
         weight_cl = (math.exp(-5.0 * (1.0 - T) * (1.0 - T))) * (end_w - init_w) + init_w  # exp
-    # print('Consistency weight: %f'%weight_cl)
     return weight_cl
 
 
@@ -32,13 +30,13 @@ def pi_smallnet_forward(net, input, device):
     else:
         delta = torch.zeros_like(input)
     input = input + delta
-    for i in range(4):
+    for i in range(3):
         input = net.linear_layers[i](input)
         input = net.bn_layers[i](input)
         input = net.act_layers[i](input)
     # add dropout
     input = F.dropout(input=input, p=0.5, training=net.training)
-    for i in range(4, 5):
+    for i in range(3, 5):
         input = net.linear_layers[i](input)
         input = net.bn_layers[i](input)
         input = net.act_layers[i](input)

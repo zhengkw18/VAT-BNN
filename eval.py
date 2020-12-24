@@ -60,8 +60,7 @@ if __name__ == "__main__":
                 if args.method == 'at':
                     r_adv = generate_adversarial_perturbation(input, target, model, eps)
                 elif args.method == 'vat':
-                    with torch.no_grad():
-                        logit = model(input)
+                    logit = model(input)
                     r_adv = generate_virtual_adversarial_perturbation(input, logit, model, eps)
                 else:
                     r_adv = generate_mi_adv_target(model, input, eps)
@@ -82,8 +81,7 @@ if __name__ == "__main__":
                 if args.method == 'at':
                     r_adv = generate_adversarial_perturbation(input, target, model, eps)
                 elif args.method == 'vat':
-                    with torch.no_grad():
-                        logit = model(input)
+                    logit = model(input)
                     r_adv = generate_virtual_adversarial_perturbation(input, logit, model, eps)
                 else:
                     r_adv = generate_mi_adv_target(model, input, eps)
