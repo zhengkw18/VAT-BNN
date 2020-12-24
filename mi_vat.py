@@ -13,7 +13,7 @@ from tqdm import tqdm
 from data_loader import fetch_dataloaders_MNIST, fetch_dataloaders_CIFAR10
 
 
-def train_single_iter(model, dl_label, dl_unlabel, mi_optimizer, psi_optimizer, epsilon, alpha, adv_target=False):
+def train_single_iter(model, dl_label, dl_unlabel, mu_optimizer, psi_optimizer, epsilon, alpha, adv_target=False):
     model.train()
 
     label_X, label_y = dl_label.__iter__().next()
@@ -27,10 +27,10 @@ def train_single_iter(model, dl_label, dl_unlabel, mi_optimizer, psi_optimizer, 
     mi_loss, kl_loss = mi_adversarial_loss(model, unlabel_X, unlabel_logit, epsilon, adv_target)
     mi_loss *= alpha
     loss = ce + mi_loss + kl_loss
-    mi_optimizer.zero_grad()
+    mu_optimizer.zero_grad()
     psi_optimizer.zero_grad()
     loss.backward()
-    mi_optimizer.step()
+    mu_optimizer.step()
     psi_optimizer.step()
 
     return ce.item(), mi_loss.item(), kl_loss.item()
@@ -57,7 +57,7 @@ def eval_epoch(model, data_loader):  # Valid Process
     return tot_loss, tot_accuracy
 
 
-def train_and_evaluate(args, model, mi_optimizer, psi_optimizer, dataloaders):
+def train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders):
     dl_label = dataloaders['label']
     dl_unlabel = dataloaders['unlabel']
     dl_val = dataloaders['val']
@@ -66,7 +66,7 @@ def train_and_evaluate(args, model, mi_optimizer, psi_optimizer, dataloaders):
     best_val_acc = 0.0
     best_step = 0
     for step in tqdm(range(args.steps)):
-        ce, mi_loss, kl_loss = train_single_iter(model, dl_label, dl_unlabel, mi_optimizer, psi_optimizer, args.epsilon, args.alpha, (args.strategy == "mivat_train"))
+        ce, mi_loss, kl_loss = train_single_iter(model, dl_label, dl_unlabel, mu_optimizer, psi_optimizer, args.epsilon, args.alpha, (args.strategy == "mivat_train"))
         if (step + 1) % (args.steps / 1000) == 0:
             tb_writer.add_scalar("training ce loss", ce, global_step=step)
             tb_writer.add_scalar("training mi loss", mi_loss, global_step=step)
@@ -91,9 +91,8 @@ def train_and_evaluate(args, model, mi_optimizer, psi_optimizer, dataloaders):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--do_train', action='store_true')
-    parser.add_argument('--distributed', default=False, type=bool)
     parser.add_argument('--strategy', type=str, choices=["mivat_train", "mipred"], default="mivat_train")
-    parser.add_argument('--workers', default=0, type=int)
+    parser.add_argument('--workers', default=4, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--ul_batch_size', default=256, type=int)
     parser.add_argument('--steps', default=100000, type=int)
@@ -144,7 +143,7 @@ if __name__ == "__main__":
     psi_optimizer = PsiSGD(psis, lr=args.learning_rate, momentum=0.9, weight_decay=2e-4, nesterov=True, num_data=len(dataloaders['unlabel']))
 
     if args.do_train:
-        train_and_evaluate()
+        train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders)
     else:
         model.load_state_dict(torch.load(os.path.join(args.ckpt_dir, 'best.pth')))
         test_loss, test_acc = eval_epoch(model, dataloaders['test'])

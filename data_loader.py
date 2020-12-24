@@ -60,10 +60,10 @@ def fetch_dataloaders_MNIST(args):
     val_dataset = torch.utils.data.Subset(train_dataset, val_set)
 
     dataloaders = {}
-    dataloaders['label'] = DataLoader(labeled_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    dataloaders['unlabel'] = DataLoader(unlabeled_dataset, batch_size=args.ul_batch_size, shuffle=True, num_workers=4)
-    dataloaders['val'] = DataLoader(val_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=4)
-    dataloaders['test'] = DataLoader(test_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=4)
+    dataloaders['label'] = DataLoader(labeled_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    dataloaders['unlabel'] = DataLoader(unlabeled_dataset, batch_size=args.ul_batch_size, shuffle=True, num_workers=args.workers)
+    dataloaders['val'] = DataLoader(val_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=args.workers)
+    dataloaders['test'] = DataLoader(test_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=args.workers)
 
     return dataloaders
 
@@ -88,9 +88,9 @@ def fetch_dataloaders_CIFAR10(args):
     val_dataset = torch.utils.data.Subset(train_dataset, val_set)
 
     dataloaders = {}
-    dataloaders['label'] = DataLoader(labeled_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    dataloaders['unlabel'] = DataLoader(unlabeled_dataset, batch_size=args.ul_batch_size, shuffle=True, num_workers=4)
-    dataloaders['val'] = DataLoader(val_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=4)
-    dataloaders['test'] = DataLoader(test_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=4)
+    dataloaders['label'] = DataLoader(labeled_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    dataloaders['unlabel'] = DataLoader(unlabeled_dataset, batch_size=args.ul_batch_size, shuffle=True, num_workers=args.workers)
+    dataloaders['val'] = DataLoader(val_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=args.workers)
+    dataloaders['test'] = DataLoader(test_dataset, batch_size=args.ul_batch_size, shuffle=False, num_workers=args.workers)
 
     return dataloaders
