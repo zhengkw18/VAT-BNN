@@ -139,8 +139,8 @@ if __name__ == "__main__":
             psis.append(param)
         else:
             mus.append(param)
-    mu_optimizer = optim.Adam(mus, lr=args.learning_rate, weight_decay=2e-4)
-    # psi_optimizer = optim.Adam(mus, lr=args.learning_rate)
+    mu_optimizer = optim.Adam(mus, lr=args.learning_rate)
+    # psi_optimizer = optim.Adam(psis, lr=args.learning_rate, weight_decay=2e-4)
     psi_optimizer = PsiSGD(psis, lr=args.learning_rate, momentum=0.9, weight_decay=2e-4, nesterov=True, num_data=len(dataloaders['unlabel']))
 
     if args.do_train:
