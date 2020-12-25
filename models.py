@@ -1,5 +1,4 @@
 import torch.nn as nn
-# from scalablebdl.mean_field import to_bayesian
 
 
 class EmptyLayer(nn.Module):

@@ -8,7 +8,8 @@ from datasets.mnist import load_mnist_dataset
 from utils import accuracy
 from models import SmallNet, LargeNet
 import torch.nn.functional as F
-from scalablebdl.mean_field import to_bayesian, PsiSGD
+from bnn_utils import to_bayesian
+from bnn_optim import PsiSGD
 
 
 def train_epoch(model, labeled_train_loader, mi_optimizer, psi_optimizer, device):  # Training Process

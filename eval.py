@@ -7,9 +7,8 @@ from utils import accuracy
 from models import SmallNet, LargeNet
 import torchvision
 from utils import generate_adversarial_perturbation, generate_virtual_adversarial_perturbation, generate_mi_adv_target
-from scalablebdl.mean_field import to_bayesian
-from scalablebdl.bnn_utils import unfreeze, freeze
 import numpy as np
+from bnn_utils import to_bayesian, freeze, unfreeze
 
 eps_plot = [0.1, 1, 5, 8, 20, 50, 100]
 

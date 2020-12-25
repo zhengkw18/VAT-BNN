@@ -3,60 +3,87 @@ import torch
 import torch.optim as optim
 import os
 import argparse
+from utils import accuracy
 from models import SmallNet, LargeNet
 import torch.nn.functional as F
-from utils import mi_adversarial_loss
+import math
 from tqdm import tqdm
 from data_loader import fetch_dataloaders_MNIST, fetch_dataloaders_CIFAR10
-from bnn_utils import to_bayesian
-from bnn_optim import PsiSGD
-from utils import accuracy
 
 
-def train_single_iter(model, dl_label, dl_unlabel, mu_optimizer, psi_optimizer, epsilon, alpha, adv_target=False):
+def cal_consistency_weight(epoch, init_ep=0, end_ep=300, init_w=0.0, end_w=20.0):
+    if epoch > end_ep:
+        weight_cl = end_w
+    elif epoch < init_ep:
+        weight_cl = init_w
+    else:
+        T = float(epoch - init_ep) / float(end_ep - init_ep)
+        weight_cl = (math.exp(-5.0 * (1.0 - T) * (1.0 - T))) * (end_w - init_w) + init_w  # exp
+    return weight_cl
+
+
+def pi_smallnet_forward(net, input):
+    input = input.contiguous().view(input.shape[0], -1)
+    if net.training:
+        delta = torch.randn_like(input) * 0.01
+    else:
+        delta = torch.zeros_like(input)
+    input = input + delta
+    for i in range(4):
+        input = net.linear_layers[i](input)
+        input = net.bn_layers[i](input)
+        input = net.act_layers[i](input)
+    # add dropout
+    input = F.dropout(input=input, p=0.5, training=net.training)
+    for i in range(4, 5):
+        input = net.linear_layers[i](input)
+        input = net.bn_layers[i](input)
+        input = net.act_layers[i](input)
+    return input
+
+
+def train_single_iter(model, optimizer, dl_label, dl_unlabel, step, max_step, alpha):
     model.train()
 
     label_X, label_y = dl_label.__iter__().next()
     unlabel_X, _ = dl_unlabel.__iter__().next()
     label_X, label_y = label_X.cuda(), label_y.cuda()
     unlabel_X = unlabel_X.cuda()
-
-    label_logit = model(label_X)
-    unlabel_logit = model(unlabel_X)
+    label_logit = pi_smallnet_forward(model, label_X)
     ce = F.cross_entropy(label_logit, label_y)
-    mi_loss, kl_loss = mi_adversarial_loss(model, unlabel_X, unlabel_logit, epsilon, adv_target)
-    mi_loss *= alpha
-    loss = ce + mi_loss + kl_loss
-    mu_optimizer.zero_grad()
-    psi_optimizer.zero_grad()
+    unlabel_logit = pi_smallnet_forward(model, unlabel_X)
+    unlabel_logit1 = pi_smallnet_forward(model, unlabel_X)
+    diff = F.mse_loss(unlabel_logit.softmax(dim=-1), unlabel_logit1.softmax(dim=-1), reduction='mean') / 10
+    weight = cal_consistency_weight(step, end_ep=max_step // 2, end_w=1.0)
+    diff *= weight * alpha
+    loss = ce + diff
+    optimizer.zero_grad()
     loss.backward()
-    mu_optimizer.step()
-    psi_optimizer.step()
+    optimizer.step()
 
-    return ce.item(), mi_loss.item(), kl_loss.item()
+    return ce.item(), diff.item()
 
 
 @torch.no_grad()
-def eval_epoch(model, data_loader, num_mc_samples=20):  # Valid Process
+def eval_epoch(model, data_loader):  # Valid Process
     model.eval()
     tot_loss, tot_accuracy = 0.0, 0.0
     times = 0
     for i, (input, target) in enumerate(data_loader):
         input = input.cuda()
         target = target.cuda()
-        output = 0
-        for j in range(num_mc_samples):
-            output += model(input).softmax(-1)
-        output /= num_mc_samples
+        logit = model(input)
+        loss = F.cross_entropy(logit, target)
+        acc = accuracy(logit, target)
         times += input.size(0)
-        tot_loss += F.cross_entropy(output.log(), target).item() * input.size(0)
-        tot_accuracy += accuracy(output, target).item() * input.size(0)
+        tot_loss += loss.cpu().data.numpy() * input.size(0)
+        tot_accuracy += acc.cpu().data.numpy() * input.size(0)
     tot_loss /= times
     tot_accuracy /= times
     return tot_loss, tot_accuracy
 
 
-def train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders):
+def train_and_evaluate(args, model, optimizer, dataloaders):
     dl_label = dataloaders['label']
     dl_unlabel = dataloaders['unlabel']
     dl_val = dataloaders['val']
@@ -65,11 +92,10 @@ def train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders):
     best_val_acc = 0.0
     best_step = 0
     for step in tqdm(range(args.steps)):
-        ce, mi_loss, kl_loss = train_single_iter(model, dl_label, dl_unlabel, mu_optimizer, psi_optimizer, args.epsilon, args.alpha, (args.strategy == "mivat_train"))
+        ce, diff = train_single_iter(model, optimizer, dl_label, dl_unlabel, step, args.steps, args.alpha)
         if (step + 1) % (args.steps / 1000) == 0:
             tb_writer.add_scalar("training ce loss", ce, global_step=step)
-            tb_writer.add_scalar("training mi loss", mi_loss, global_step=step)
-            tb_writer.add_scalar("training kl loss", kl_loss, global_step=step)
+            tb_writer.add_scalar("training diff loss", diff, global_step=step)
         if (step + 1) % (args.steps / 100) == 0:
             val_loss, val_acc = eval_epoch(model, dl_val)
             tb_writer.add_scalar("validation loss", val_loss, global_step=step)
@@ -80,8 +106,7 @@ def train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders):
                 os.makedirs(args.ckpt_dir, exist_ok=True)
                 torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'best.pth'))
             print(f"training ce loss: {ce}")
-            print(f"training mi loss: {mi_loss}")
-            print(f"training kl loss: {kl_loss}")
+            print(f"training diff loss: {diff}")
             print(f"validation accuracy: {val_acc}")
             print(f"best step: {best_step}")
             print(f"best validation accuracy: {best_val_acc}")
@@ -90,27 +115,19 @@ def train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--do_train', action='store_true')
-    parser.add_argument('--strategy', type=str, choices=["mivat_train", "mipred"], default="mivat_train")
     parser.add_argument('--workers', default=4, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--ul_batch_size', default=256, type=int)
-    parser.add_argument('--steps', default=10000, type=int)
+    parser.add_argument('--steps', default=100000, type=int)
     parser.add_argument('--learning_rate', default=0.001, type=float)
     parser.add_argument('--label_num', default=0, type=int)
+    parser.add_argument('--alpha', type=float, default=10.0)
     parser.add_argument('--data_path', default='./data', type=str, help='The path of the data directory')
     parser.add_argument('--ckpt_dir', default='./ckpt', type=str, help='The path of the checkpoint directory')
     parser.add_argument('--log_dir', default='./log', type=str)
     parser.add_argument('--dataset', default='mnist', type=str)
-    parser.add_argument('--epsilon', type=float, default=2.0)
-    parser.add_argument('--alpha', type=float, default=2.0)
-    parser.add_argument('--pretrained_config', default='', type=str)
     args = parser.parse_args()
-    config = f"{args.strategy}_batch-{args.batch_size}_dataset-{args.dataset}_labelnum-{args.label_num}_epsilon-{args.epsilon}_alpha-{args.alpha}"
-    if args.pretrained_config != '':
-        config = config + "_pretrained"
-        print("have direct pretrained configure")
-        base_config = args.pretrained_config
-        base_ckpt_dir = os.path.join(args.ckpt_dir, base_config)
+    config = 'pi_batch-{}_dataset-{}_labelnum-{}'.format(args.batch_size, args.dataset, args.label_num)
     args.ckpt_dir = os.path.join(args.ckpt_dir, config)
     args.log_dir = os.path.join(args.log_dir, config)
     tb_writer = SummaryWriter(args.log_dir)
@@ -124,24 +141,9 @@ if __name__ == "__main__":
         print("Unsupported dataset.")
         exit(0)
     model = model.cuda()
-    if args.pretrained_config != '':
-        model.load_state_dict(torch.load(os.path.join(base_ckpt_dir, 'best.pth')))
-        test_loss, test_acc = eval_epoch(model, dataloaders['test'])
-        print(f"pretrained model testing loss: {test_loss}")
-        print(f"pretrained model testing accuracy: {test_acc}")
-    model = to_bayesian(model)
-    mus, psis = [], []
-    for name, param in model.named_parameters():
-        if 'psi' in name:
-            psis.append(param)
-        else:
-            mus.append(param)
-    mu_optimizer = optim.Adam(mus, lr=args.learning_rate)
-    # psi_optimizer = optim.Adam(psis, lr=args.learning_rate, weight_decay=2e-4)
-    psi_optimizer = PsiSGD(psis, lr=args.learning_rate, momentum=0.9, weight_decay=2e-4, nesterov=True, num_data=len(dataloaders['unlabel']))
-
+    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     if args.do_train:
-        train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders)
+        train_and_evaluate(args, model, optimizer, dataloaders)
     else:
         model.load_state_dict(torch.load(os.path.join(args.ckpt_dir, 'best.pth')))
         test_loss, test_acc = eval_epoch(model, dataloaders['test'])
