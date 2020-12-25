@@ -96,6 +96,7 @@ def mi_adversarial_loss(model, input, logit, epsilon, adv_target=False):
         if adv_target:
             logit_p = model(input + r_adv)
             mi_loss = mutual_information(logit_p, logit_q)
+            logit = logit.detach()
             kl_loss = (kl_divergence_with_logit(logit, logit_p) + kl_divergence_with_logit(logit, logit_q)) / 2
         else:
             mi_loss = mutual_information(logit, logit_q)

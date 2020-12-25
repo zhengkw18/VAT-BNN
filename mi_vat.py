@@ -7,7 +7,7 @@ from utils import accuracy
 from models import SmallNet, LargeNet
 import torch.nn.functional as F
 from scalablebdl.mean_field import to_bayesian, PsiSGD
-from scalablebdl.bnn_utils import freeze, unfreeze
+from scalablebdl.bnn_utils import freeze, unfreeze, Bayes_ensemble
 from utils import mi_adversarial_loss
 from tqdm import tqdm
 from data_loader import fetch_dataloaders_MNIST, fetch_dataloaders_CIFAR10
@@ -38,23 +38,24 @@ def train_single_iter(model, dl_label, dl_unlabel, mu_optimizer, psi_optimizer, 
 
 @torch.no_grad()
 def eval_epoch(model, data_loader):  # Valid Process
-    model.eval()
-    freeze(model)
-    tot_loss, tot_accuracy = 0.0, 0.0
-    times = 0
-    for i, (input, target) in enumerate(data_loader):
-        input = input.cuda()
-        target = target.cuda()
-        logit = model(input)
-        loss = F.cross_entropy(logit, target)
-        acc = accuracy(logit, target)
-        times += input.size(0)
-        tot_loss += loss.cpu().data.numpy() * input.size(0)
-        tot_accuracy += acc.cpu().data.numpy() * input.size(0)
-    tot_loss /= times
-    tot_accuracy /= times
-    unfreeze(model)
-    return tot_loss, tot_accuracy
+    # model.eval()
+    # freeze(model)
+    # tot_loss, tot_accuracy = 0.0, 0.0
+    # times = 0
+    # for i, (input, target) in enumerate(data_loader):
+    #     input = input.cuda()
+    #     target = target.cuda()
+    #     logit = model(input)
+    #     loss = F.cross_entropy(logit, target)
+    #     acc = accuracy(logit, target)
+    #     times += input.size(0)
+    #     tot_loss += loss.cpu().data.numpy() * input.size(0)
+    #     tot_accuracy += acc.cpu().data.numpy() * input.size(0)
+    # tot_loss /= times
+    # tot_accuracy /= times
+    # unfreeze(model)
+    # return tot_loss, tot_accuracy
+    return Bayes_ensemble(data_loader, model)
 
 
 def train_and_evaluate(args, model, mu_optimizer, psi_optimizer, dataloaders):
@@ -138,7 +139,7 @@ if __name__ == "__main__":
             psis.append(param)
         else:
             mus.append(param)
-    mu_optimizer = optim.Adam(mus, lr=args.learning_rate)
+    mu_optimizer = optim.Adam(mus, lr=args.learning_rate, weight_decay=2e-4)
     # psi_optimizer = optim.Adam(mus, lr=args.learning_rate)
     psi_optimizer = PsiSGD(psis, lr=args.learning_rate, momentum=0.9, weight_decay=2e-4, nesterov=True, num_data=len(dataloaders['unlabel']))
 
