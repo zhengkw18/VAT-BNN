@@ -3,11 +3,10 @@ import torch
 import torch.optim as optim
 import os
 import argparse
-from utils import accuracy
 from models import SmallNet, LargeNet
 import torch.nn.functional as F
 from scalablebdl.mean_field import to_bayesian, PsiSGD
-from scalablebdl.bnn_utils import freeze, unfreeze, Bayes_ensemble
+from scalablebdl.bnn_utils import unfreeze, Bayes_ensemble
 from utils import mi_adversarial_loss
 from tqdm import tqdm
 from data_loader import fetch_dataloaders_MNIST, fetch_dataloaders_CIFAR10
@@ -96,7 +95,7 @@ if __name__ == "__main__":
     parser.add_argument('--workers', default=4, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--ul_batch_size', default=256, type=int)
-    parser.add_argument('--steps', default=100000, type=int)
+    parser.add_argument('--steps', default=10000, type=int)
     parser.add_argument('--learning_rate', default=0.001, type=float)
     parser.add_argument('--label_num', default=0, type=int)
     parser.add_argument('--data_path', default='./data', type=str, help='The path of the data directory')
