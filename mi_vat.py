@@ -102,7 +102,7 @@ if __name__ == "__main__":
     parser.add_argument('--log_dir', default='./log', type=str)
     parser.add_argument('--dataset', default='mnist', type=str)
     parser.add_argument('--epsilon', type=float, default=2.0)
-    parser.add_argument('--alpha', type=float, default=2.0)
+    parser.add_argument('--alpha', type=float, default=1.0)
     parser.add_argument('--pretrained_config', default='', type=str)
     args = parser.parse_args()
     config = f"{args.strategy}_batch-{args.batch_size}_dataset-{args.dataset}_labelnum-{args.label_num}_epsilon-{args.epsilon}_alpha-{args.alpha}"
