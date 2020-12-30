@@ -18,8 +18,8 @@ def train_single_iter(model, dl_label, dl_unlabel, mu_optimizer, psi_optimizer, 
 
     label_X, label_y = dl_label.__iter__().next()
     unlabel_X, _ = dl_unlabel.__iter__().next()
-    label_X, label_y = label_X.cuda(), label_y.cuda()
-    unlabel_X = unlabel_X.cuda()
+    label_X, label_y = label_X.cuda(non_blocking=True), label_y.cuda(non_blocking=True)
+    unlabel_X = unlabel_X.cuda(non_blocking=True)
 
     label_logit = model(label_X)
     unlabel_logit = model(unlabel_X)
@@ -42,8 +42,8 @@ def eval_epoch(model, data_loader, num_mc_samples=20):  # Valid Process
     tot_loss, tot_accuracy = 0.0, 0.0
     times = 0
     for i, (input, target) in enumerate(data_loader):
-        input = input.cuda()
-        target = target.cuda()
+        input = input.cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
         output = 0
         for j in range(num_mc_samples):
             output += model(input).softmax(-1)
@@ -91,8 +91,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--do_train', action='store_true')
     parser.add_argument('--strategy', type=str, choices=["mivat_train", "mipred"], default="mivat_train")
-    parser.add_argument('--workers', default=4, type=int)
-    parser.add_argument('--batch_size', default=64, type=int)
+    parser.add_argument('--workers', default=0, type=int)
+    parser.add_argument('--batch_size', default=100, type=int)
     parser.add_argument('--ul_batch_size', default=256, type=int)
     parser.add_argument('--steps', default=10000, type=int)
     parser.add_argument('--learning_rate', default=0.001, type=float)
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = f"{args.strategy}_batch-{args.batch_size}_dataset-{args.dataset}_labelnum-{args.label_num}_epsilon-{args.epsilon}_alpha-{args.alpha}"
     if args.pretrained_config != '':
-        config = config + "_pretrained"
+        config = config + "_pretrained_" + args.pretrained_config[:2]
         print("have direct pretrained configure")
         base_config = args.pretrained_config
         base_ckpt_dir = os.path.join(args.ckpt_dir, base_config)

@@ -14,16 +14,16 @@ def train_single_iter(model, optimizer, dl_label, dl_unlabel, epsilon, vat):
     model.train()
 
     label_X, label_y = dl_label.__iter__().next()
-    unlabel_X, _ = dl_unlabel.__iter__().next()
-    label_X, label_y = label_X.cuda(), label_y.cuda()
-    unlabel_X = unlabel_X.cuda()
+    label_X, label_y = label_X.cuda(non_blocking=True), label_y.cuda(non_blocking=True)
     label_logit = model(label_X)
     ce = F.cross_entropy(label_logit, label_y)
     if vat:
+        unlabel_X, _ = dl_unlabel.__iter__().next()
+        unlabel_X = unlabel_X.cuda(non_blocking=True)
         unlabel_logit = model(unlabel_X)
         vat = virtual_adversarial_loss(unlabel_X, unlabel_logit, model, epsilon)
     else:
-        vat = torch.FloatTensor([0.0]).cuda()
+        vat = torch.FloatTensor([0.0]).cuda(non_blocking=True)
     loss = ce + vat
     optimizer.zero_grad()
     loss.backward()
@@ -38,8 +38,8 @@ def eval_epoch(model, data_loader):  # Valid Process
     tot_loss, tot_accuracy = 0.0, 0.0
     times = 0
     for i, (input, target) in enumerate(data_loader):
-        input = input.cuda()
-        target = target.cuda()
+        input = input.cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
         logit = model(input)
         loss = F.cross_entropy(logit, target)
         acc = accuracy(logit, target)
@@ -84,10 +84,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--vat', action='store_true')
     parser.add_argument('--do_train', action='store_true')
-    parser.add_argument('--workers', default=4, type=int)
+    parser.add_argument('--workers', default=0, type=int)
     parser.add_argument('--batch_size', default=100, type=int)
     parser.add_argument('--ul_batch_size', default=256, type=int)
-    parser.add_argument('--steps', default=10000, type=int)
+    parser.add_argument('--steps', default=100000, type=int)
     parser.add_argument('--epsilon', type=float, default=2.0)
     parser.add_argument('--learning_rate', default=0.001, type=float)
     parser.add_argument('--label_num', default=0, type=int)
