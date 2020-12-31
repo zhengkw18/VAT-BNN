@@ -41,7 +41,7 @@ def virtual_adversarial_loss(x, logit, model, epsilon):
         logit_m = model(x + r_vadv)
         loss = kl_divergence_with_logit(logit_p, logit_m)
     if torch.isnan(loss):
-        return 0
+        loss = torch.FloatTensor([0.0]).cuda(non_blocking=True)
     return loss
 
 
@@ -102,9 +102,9 @@ def mi_adversarial_loss(model, input, logit, epsilon, adv_target=False):
             mi_loss = mutual_information(logit, logit_q)
             kl_loss = torch.zeros_like(mi_loss)
     if torch.isnan(mi_loss):
-        mi_loss = 0.0
+        mi_loss = torch.FloatTensor([0.0]).cuda(non_blocking=True)
     if torch.isnan(kl_loss):
-        kl_loss = 0.0
+        kl_loss = torch.FloatTensor([0.0]).cuda(non_blocking=True)
     return mi_loss, kl_loss
 
 
