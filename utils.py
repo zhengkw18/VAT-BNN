@@ -101,6 +101,10 @@ def mi_adversarial_loss(model, input, logit, epsilon, adv_target=False):
         else:
             mi_loss = mutual_information(logit, logit_q)
             kl_loss = torch.zeros_like(mi_loss)
+    if torch.isnan(mi_loss):
+        mi_loss = 0.0
+    if torch.isnan(kl_loss):
+        kl_loss = 0.0
     return mi_loss, kl_loss
 
 
