@@ -1,14 +1,13 @@
 import torch
 import os
 import argparse
-from datasets.cifar10 import load_cifar_dataset
-from datasets.mnist import load_mnist_dataset
 from utils import accuracy
 from models import SmallNet, LargeNet
 import torchvision
 from utils import generate_adversarial_perturbation, generate_virtual_adversarial_perturbation, generate_mi_adv_target
 import numpy as np
 from bnn_utils import to_bayesian, freeze, unfreeze
+from data_loader import fetch_dataloaders_MNIST, fetch_dataloaders_CIFAR10
 
 eps_plot = [0.1, 1, 5, 8, 20, 50, 100]
 
@@ -19,28 +18,27 @@ if __name__ == "__main__":
     parser.add_argument('--pretrain_config', default='base_batch-100_epochs-300_dataset-mnist_labelnum-0', type=str)
     parser.add_argument('--bayes', default=False, type=bool)
     parser.add_argument('--workers', default=0, type=int)
-    parser.add_argument('--batch_size', default=64, type=int)
+    parser.add_argument('--batch_size', default=100, type=int)
+    parser.add_argument('--ul_batch_size', default=256, type=int)
     parser.add_argument('--method', default='vat', type=str, choices=["at", "vat", "mi"])
     parser.add_argument('--data_path', default='./data', type=str, help='The path of the data directory')
     parser.add_argument('--ckpt_dir', default='./ckpt', type=str, help='The path of the checkpoint directory')
     parser.add_argument('--log_dir', default='./log', type=str)
-    parser.add_argument('--dataset', default='cifar10', type=str)
+    parser.add_argument('--dataset', default='mnist', type=str)
     parser.add_argument('--label_num', default=0, type=int)
-    parser.add_argument('--distributed', default=False, type=bool)
     args = parser.parse_args()
     # args.ckpt_dir = os.path.join(args.ckpt_dir, args.pretrain_config)
     # args.log_dir = os.path.join(args.log_dir, args.pretrain_config)
-    device = torch.device('cuda')
     if args.dataset == 'mnist':
-        labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_mnist_dataset(args)
+        dataloaders = fetch_dataloaders_MNIST(args)
         model = SmallNet()
     elif args.dataset == 'cifar10':
-        labeled_train_loader, unlabeled_train_loader, test_loader, valid_loader, labeled_len = load_cifar_dataset(args)
+        dataloaders = fetch_dataloaders_CIFAR10(args)
         model = LargeNet()
     else:
         print("Unsupported dataset.")
         exit(0)
-    model.to(device)
+    model.cuda()
     if args.bayes:
         model = to_bayesian(model)
     model.load_state_dict(torch.load(os.path.join(args.ckpt_dir, os.path.join(args.pretrain_config, 'best.pth'))))
@@ -51,9 +49,9 @@ if __name__ == "__main__":
         model = to_bayesian(model)
     if args.plot:
         images = []
-        for i, (input, target) in enumerate(test_loader):
-            input = input.to(device)[:10]
-            target = target.to(device)[:10]
+        for i, (input, target) in enumerate(dataloaders['test']):
+            input = input.cuda()[:10]
+            target = target.cuda()[:10]
             for j in range(7):
                 eps = eps_plot[j]
                 if args.method == 'at':
@@ -74,9 +72,9 @@ if __name__ == "__main__":
         for eps in np.arange(0, 5, 0.1):
             tot_accuracy = 0.0
             times = 0
-            for i, (input, target) in enumerate(test_loader):
-                input = input.to(device)
-                target = target.to(device)
+            for i, (input, target) in enumerate(dataloaders['test']):
+                input = input.cuda()
+                target = target.cuda()
                 if args.method == 'at':
                     r_adv = generate_adversarial_perturbation(input, target, model, eps)
                 elif args.method == 'vat':
