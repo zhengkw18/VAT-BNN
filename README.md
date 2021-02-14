@@ -13,3 +13,5 @@
 训练mi：python mi_vat.py --do_train --label_num=0 --pretrained_config=vat_batch-100_dataset-mnist_labelnum-0_epsilon-0.5 --epsilon=0.1
 
 pretrained_config为预训练模型所在文件夹
+
+### 感想
