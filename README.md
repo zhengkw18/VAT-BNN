@@ -1,17 +1,7 @@
 # VAT-BNN
 
-### Usage
-
-训练base：python base_vat.py --do_train --learning_rate=0.001 --label_num=xx --epsilon=xx
-
-训练vat：python base_vat.py --do_train --learning_rate=0.001 --label_num=xx --epsilon=xx  --vat
-
-其中epsilon控制攻击半径，label_num为标注数量，为0代表全标注
-
-训练pi模型：python pi_model.py --do_train --label_num=xx
-
-训练mi：python mi_vat.py --do_train --label_num=0 --pretrained_config=vat_batch-100_dataset-mnist_labelnum-0_epsilon-0.5 --epsilon=0.1
-
-pretrained_config为预训练模型所在文件夹
-
 ### 感想
+
+选修这个课本来的打算是既然选定这个方向了，就用一个课程的大作业训练下自己，万一搞出点东西呢。结果可以说是很不如人意了，虽然学期初大有挑战自己的动力，什么前半学期造完机，第10周前写完数据库。只能说大三上的自己还是那么的贪玩，自己也并没有快速解决各种ddl的能力，明明计划的一个半月时间，硬是在Poster前的一周才开始真正写代码和跑训练，幸亏还是调出来了点不错的结果。可离期望总是差的那么远，idea是学长的，选题是队友的，自己只是在复现一些简单的不能再简单的模型，在队友的逻辑下调参，完全没做出任何创新，甚至结果也没那么有说服力。要不是后两次小作业狠心卷了一下，连A也拿不到。
+
+从功利性的角度说两句，选了这课若对大作业没有信心，还是要在小作业上下些功夫。四次小作业，**每次**都有加2分甚至更多的空间，写完和其它同学对下实验结果保证不犯错，再稍微做些拓展，即使像我这样大作业要扣去6~7分，也是有卷到A+的机会的。
